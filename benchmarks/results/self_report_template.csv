@@ -1,0 +1,3 @@
+participant,session_id,condition,mood_pre,mood_post,calm_pre,calm_post,stress_pre,stress_post
+p1,p1_adaptive,adaptive,4,7,3,6,7,4
+p1,p1_control,control,4,5,3,4,7,7

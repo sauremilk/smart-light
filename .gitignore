@@ -1,0 +1,34 @@
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Generated training artifacts and local runtime outputs
+artifacts/
+dataset/face_finetune/
+benchmarks/results/sessions/
+benchmarks/results/runtime_*.out.log
+benchmarks/results/runtime_*.err.log
+
+# Large local assets (downloaded/generated)
+data/
+wav2vec2_checkpoints/
+pretrained_models/
+
+# Local overrides and secrets
+config_local.py
+.env
+.env.*

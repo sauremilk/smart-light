@@ -1,0 +1,49 @@
+{
+  "benchmark": "audio_noise_robustness_v1",
+  "generated_at": 1772995705.0884104,
+  "config": {
+    "audio_weight": 0.35,
+    "snr_floor_db": 0.0,
+    "snr_ceil_db": 20.0,
+    "dynamic_min_factor": 0.2,
+    "quality_exponent": 1.2
+  },
+  "rows": [
+    {
+      "snr_db": -5.0,
+      "quality": 0.0,
+      "audio_weight_dynamic": 0.034999999999999996
+    },
+    {
+      "snr_db": 0.0,
+      "quality": 0.0,
+      "audio_weight_dynamic": 0.034999999999999996
+    },
+    {
+      "snr_db": 5.0,
+      "quality": 0.25,
+      "audio_weight_dynamic": 0.07690629989241496
+    },
+    {
+      "snr_db": 10.0,
+      "quality": 0.5,
+      "audio_weight_dynamic": 0.14390780914609302
+    },
+    {
+      "snr_db": 15.0,
+      "quality": 0.75,
+      "audio_weight_dynamic": 0.23472608020043825
+    },
+    {
+      "snr_db": 20.0,
+      "quality": 1.0,
+      "audio_weight_dynamic": 0.35
+    },
+    {
+      "snr_db": 25.0,
+      "quality": 1.0,
+      "audio_weight_dynamic": 0.35
+    }
+  ],
+  "monotonic_dynamic_weight": true
+}

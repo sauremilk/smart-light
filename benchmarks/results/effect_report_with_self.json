@@ -1,0 +1,108 @@
+{
+  "inputs": [
+    "benchmarks\\results\\sessions\\p1_adaptive.jsonl",
+    "benchmarks\\results\\sessions\\p1_control.jsonl"
+  ],
+  "n_sessions": 2,
+  "by_condition": {
+    "adaptive": {
+      "n_sessions": 1,
+      "delta_dist_mean": -0.2699999999999999,
+      "delta_dist_median": -0.2699999999999999,
+      "slope_mean": -0.06618181818181817,
+      "at_target_ratio_mean": 0.0,
+      "duration_mean_sec": 9.0
+    },
+    "control": {
+      "n_sessions": 1,
+      "delta_dist_mean": 0.06999999999999995,
+      "delta_dist_median": 0.06999999999999995,
+      "slope_mean": 0.015696969696969702,
+      "at_target_ratio_mean": 0.0,
+      "duration_mean_sec": 9.0
+    }
+  },
+  "paired_effect": {
+    "n_participants_paired": 1,
+    "adaptive_advantage_mean": 0.33999999999999986,
+    "adaptive_advantage_median": 0.33999999999999986,
+    "details": "Positive value => adaptive improved distance-to-target more than control."
+  },
+  "self_report_csv": "benchmarks/results/self_report_template.csv",
+  "self_report_summary": {
+    "n_linked_sessions": 2,
+    "by_condition": {
+      "adaptive": {
+        "n_sessions": 1,
+        "mood_delta_mean": 3.0,
+        "calm_delta_mean": 3.0,
+        "stress_delta_mean": -3.0,
+        "wellbeing_delta_mean": 3.0
+      },
+      "control": {
+        "n_sessions": 1,
+        "mood_delta_mean": 1.0,
+        "calm_delta_mean": 1.0,
+        "stress_delta_mean": 0.0,
+        "wellbeing_delta_mean": 0.6666666666666666
+      }
+    },
+    "paired_adaptive_advantage": {
+      "n_participants_paired": 1,
+      "wellbeing_advantage_mean": 2.3333333333333335,
+      "details": "Positive value => adaptive better subjective improvement."
+    }
+  },
+  "self_report_linked_sessions": [
+    {
+      "participant": "p1",
+      "session_id": "p1_adaptive",
+      "condition": "adaptive",
+      "delta_dist": -0.2699999999999999,
+      "slope_dist_per_sec": -0.06618181818181817,
+      "mood_delta": 3.0,
+      "calm_delta": 3.0,
+      "stress_delta": -3.0,
+      "wellbeing_delta": 3.0
+    },
+    {
+      "participant": "p1",
+      "session_id": "p1_control",
+      "condition": "control",
+      "delta_dist": 0.06999999999999995,
+      "slope_dist_per_sec": 0.015696969696969702,
+      "mood_delta": 1.0,
+      "calm_delta": 1.0,
+      "stress_delta": 0.0,
+      "wellbeing_delta": 0.6666666666666666
+    }
+  ],
+  "sessions": [
+    {
+      "file": "benchmarks\\results\\sessions\\p1_adaptive.jsonl",
+      "participant": "p1",
+      "session_id": "p1_adaptive",
+      "condition": "adaptive",
+      "n_samples": 10,
+      "duration_sec": 9.0,
+      "start_dist": 0.82,
+      "end_dist": 0.55,
+      "delta_dist": -0.2699999999999999,
+      "slope_dist_per_sec": -0.06618181818181817,
+      "at_target_ratio": 0.0
+    },
+    {
+      "file": "benchmarks\\results\\sessions\\p1_control.jsonl",
+      "participant": "p1",
+      "session_id": "p1_control",
+      "condition": "control",
+      "n_samples": 10,
+      "duration_sec": 9.0,
+      "start_dist": 0.92,
+      "end_dist": 0.99,
+      "delta_dist": 0.06999999999999995,
+      "slope_dist_per_sec": 0.015696969696969702,
+      "at_target_ratio": 0.0
+    }
+  ]
+}

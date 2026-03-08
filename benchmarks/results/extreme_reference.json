@@ -1,0 +1,246 @@
+{
+  "benchmark": "extreme_reference_v1",
+  "benchmark_fingerprint": "ac673fbfac0e",
+  "settings": {
+    "limit": 14,
+    "seed": 17,
+    "variants_per_sample": 1,
+    "profiles": [
+      "low_light_noise",
+      "motion_blur",
+      "jpeg_artifacts",
+      "occlusion",
+      "rotation_scale",
+      "color_cast_shadow",
+      "mixed_extreme"
+    ],
+    "detector_backend": "opencv",
+    "face_mesh": false,
+    "face_mesh_weight": 0.25,
+    "head_pose_strength": 1.0
+  },
+  "dataset": {
+    "base_samples": 14,
+    "hard_samples": 14,
+    "profiles": [
+      "low_light_noise",
+      "motion_blur",
+      "jpeg_artifacts",
+      "occlusion",
+      "rotation_scale",
+      "color_cast_shadow",
+      "mixed_extreme"
+    ],
+    "failed_predictions": 0
+  },
+  "baseline": {
+    "accuracy": 0.2857142857142857,
+    "macro_f1": 0.27210884353741494,
+    "weighted_score": 0.27755102040816326,
+    "index": 278,
+    "confusion_matrix": [
+      [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        2
+      ],
+      [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        2,
+        0,
+        0
+      ]
+    ]
+  },
+  "enhanced": {
+    "accuracy": 0.35714285714285715,
+    "macro_f1": 0.3197278911564626,
+    "weighted_score": 0.3346938775510204,
+    "index": 335,
+    "confusion_matrix": [
+      [
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        2,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        1
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        2,
+        0,
+        0
+      ]
+    ]
+  },
+  "delta": {
+    "accuracy": 0.07142857142857145,
+    "macro_f1": 0.04761904761904767,
+    "weighted_score": 0.05714285714285716,
+    "index": 57
+  },
+  "hardness": {
+    "hardest_profile": "low_light_noise",
+    "hardest_profile_enhanced_weighted_score": 0.0,
+    "per_profile": {
+      "low_light_noise": {
+        "n": 2,
+        "baseline_accuracy": 0.0,
+        "baseline_macro_f1": 0.0,
+        "enhanced_accuracy": 0.0,
+        "enhanced_macro_f1": 0.0,
+        "enhanced_weighted_score": 0.0
+      },
+      "motion_blur": {
+        "n": 2,
+        "baseline_accuracy": 0.5,
+        "baseline_macro_f1": 0.14285714285714285,
+        "enhanced_accuracy": 0.5,
+        "enhanced_macro_f1": 0.14285714285714285,
+        "enhanced_weighted_score": 0.2857142857142857
+      },
+      "jpeg_artifacts": {
+        "n": 2,
+        "baseline_accuracy": 0.5,
+        "baseline_macro_f1": 0.09523809523809523,
+        "enhanced_accuracy": 0.5,
+        "enhanced_macro_f1": 0.09523809523809523,
+        "enhanced_weighted_score": 0.2571428571428571
+      },
+      "occlusion": {
+        "n": 2,
+        "baseline_accuracy": 1.0,
+        "baseline_macro_f1": 0.2857142857142857,
+        "enhanced_accuracy": 1.0,
+        "enhanced_macro_f1": 0.2857142857142857,
+        "enhanced_weighted_score": 0.5714285714285714
+      },
+      "rotation_scale": {
+        "n": 2,
+        "baseline_accuracy": 0.0,
+        "baseline_macro_f1": 0.0,
+        "enhanced_accuracy": 0.0,
+        "enhanced_macro_f1": 0.0,
+        "enhanced_weighted_score": 0.0
+      },
+      "color_cast_shadow": {
+        "n": 2,
+        "baseline_accuracy": 0.0,
+        "baseline_macro_f1": 0.0,
+        "enhanced_accuracy": 0.0,
+        "enhanced_macro_f1": 0.0,
+        "enhanced_weighted_score": 0.0
+      },
+      "mixed_extreme": {
+        "n": 2,
+        "baseline_accuracy": 0.0,
+        "baseline_macro_f1": 0.0,
+        "enhanced_accuracy": 0.5,
+        "enhanced_macro_f1": 0.09523809523809523,
+        "enhanced_weighted_score": 0.2571428571428571
+      }
+    }
+  }
+}

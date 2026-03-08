@@ -1,0 +1,43 @@
+{
+  "settings": {
+    "limit": 14,
+    "detector": "opencv",
+    "seeds": [
+      1
+    ],
+    "face_mesh_weights": [
+      0.25
+    ],
+    "head_pose_strengths": [
+      0.35
+    ]
+  },
+  "best": {
+    "face_mesh_weight": 0.25,
+    "head_pose_strength": 0.35,
+    "metrics": {
+      "enhanced_no_fm_acc_mean": 0.5,
+      "enhanced_with_fm_acc_mean": 0.5,
+      "no_fm_delta_acc_mean": 0.07142857142857145,
+      "with_fm_delta_acc_mean": 0.07142857142857145,
+      "no_fm_delta_f1_mean": 0.11428571428571432,
+      "with_fm_delta_f1_mean": 0.11428571428571432,
+      "fm_extra_acc_mean": 0.0
+    }
+  },
+  "ranked": [
+    {
+      "face_mesh_weight": 0.25,
+      "head_pose_strength": 0.35,
+      "metrics": {
+        "enhanced_no_fm_acc_mean": 0.5,
+        "enhanced_with_fm_acc_mean": 0.5,
+        "no_fm_delta_acc_mean": 0.07142857142857145,
+        "with_fm_delta_acc_mean": 0.07142857142857145,
+        "no_fm_delta_f1_mean": 0.11428571428571432,
+        "with_fm_delta_f1_mean": 0.11428571428571432,
+        "fm_extra_acc_mean": 0.0
+      }
+    }
+  ]
+}
