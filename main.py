@@ -828,6 +828,10 @@ def _parse_args():
         help="Optionale Session-ID fuer Evaluations-Logs",
     )
     parser.add_argument(
+        "--headless", action="store_true",
+        help="Deaktiviert OpenCV-Fenster/Keyboard-UI (fuer headless Umgebungen).",
+    )
+    parser.add_argument(
         "--pseudonymize-session", action="store_true",
         help="Pseudonymisiert participant/session_id im Session-Log (gesalzener Hash).",
     )
@@ -1828,7 +1832,7 @@ def main():
                 _append_session_log(args.session_log, payload)
                 last_session_log_ts = time.time()
 
-            if not args.mock:
+            if not args.mock and not args.headless:
                 cv2.imshow("Emotion Light", frame)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("q"):
@@ -1858,8 +1862,11 @@ def main():
         time.sleep(1)
         if cap:
             cap.release()
-        if not args.mock:
-            cv2.destroyAllWindows()
+        if not args.mock and not args.headless:
+            try:
+                cv2.destroyAllWindows()
+            except Exception:
+                pass
         log.info("Beendet.")
 
 

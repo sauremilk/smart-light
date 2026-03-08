@@ -64,7 +64,7 @@ def test_robust_scores_can_use_detector_fallback(monkeypatch):
 def test_predict_enhanced_returns_label_under_stubbed_scores(monkeypatch):
     mod = _load_accuracy_module()
 
-    def fake_robust(frame, detector_backend):
+    def fake_robust(frame, detector_backend, profile_hint=None):
         scores = {e: 0.0 for e in mod.EMOTIONS}
         scores["happy"] = 95.0
         return scores, 0.95, "lifted", 0.8, "opencv"

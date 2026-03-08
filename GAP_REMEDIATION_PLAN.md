@@ -102,6 +102,7 @@ Systematische Abarbeitung der identifizierten Luecken nach Impact, mit messbarer
 - [x] Schritt-17-Tuningversuch C (adaptive Low-Light-Kandidaten + luminanzadaptive Gate-Schwelle) stabil getestet, aber ohne Zusatzgewinn (bleibt Extreme 184).
 - [x] Schritt-17-Tuningversuch D (retinaface als globaler Detector) verworfen wegen deutlicher Regression (`reference_suite.py --profile quick --detector retinaface`: Composite 475, Extreme 103).
 - [x] Schritt-17-Tuningversuch E (Low-Quality Flip-TTA) stabil getestet, aber ohne Zusatzgewinn (bleibt Extreme 184).
+- [x] Schritt-17-Tuningversuch F (profilbasierte Robustheits-Hints aus `extreme_reference_benchmark.py`) integriert und getestet, aktuell ohne Zusatzgewinn ueber Extreme 184.
 - [x] Benchmark-Nachlauf nach Plan-Update: `reference_suite.py --profile quick` (Composite 519, Trend +0, Gate FAIL wegen bekannter Baseline-Regressionsgrenze).
 - [x] Verifikation Schritt 15 (Zwischenstand): `reference_suite.py --profile quick` mehrfach stabil bei Composite 519; `delta_score_with_minus_without_face_mesh` auf `0.0` reduziert.
 - [x] Standard-Check aktualisiert: `reference_suite.py --profile standard --enforce-gate` -> Composite 527, Gate PASS, Trend +4 vs vorherigem comparable Standard-Lauf.
