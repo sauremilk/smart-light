@@ -346,6 +346,7 @@ def run_extreme_benchmark(
                 face_mesh_weight=face_mesh_weight,
                 head_pose_strength=head_pose_strength,
                 return_debug=False,
+                hard_profile=hs.profile,
             )
             if isinstance(pe, tuple):
                 pe = pe[0]

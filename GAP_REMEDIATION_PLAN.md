@@ -91,12 +91,17 @@ Systematische Abarbeitung der identifizierten Luecken nach Impact, mit messbarer
 - [x] Verifikation Schritt 18 (quick): `reference_suite.py --profile quick` -> Composite 533, Gate FAIL (nur extreme_visual_robustness unter Baseline-Schwelle).
 - [x] Verifikation Schritt 18 (standard gate): `reference_suite.py --profile standard --enforce-gate` -> Composite 533, Gate PASS.
 - [x] Verifikation Schritt 18 (strict gate): `reference_suite.py --profile strict --enforce-gate` -> Composite 541, Gate PASS.
+- [x] Schritt 19 abgeschlossen: Agentic Face-Finetune Pipeline erfolgreich durchgelaufen (`execute_agentic_face_finetune_pipeline.py --skip-dataset --benchmark-profile strict --retry-on-fail`).
+- [x] Verifikation Schritt 19 (strict gate): Composite 542, Gate PASS, Training-Val-Accuracy 96.64%, ONNX-Export erfolgreich (`artifacts/face_finetune/face_finetuned.onnx`).
 - [x] Verifikation Schritt 14: `pytest tests/test_main_overlay.py tests/test_uncertainty_guardrail.py` + `reference_suite.py --profile quick` (Composite 519, test_quality 1000, e2e_runtime 937).
 - [x] Verifikation Schritt 15: `pytest tests/test_audio_quality.py tests/test_light_mapping.py tests/test_main_overlay.py tests/test_uncertainty_guardrail.py` + `benchmarks/audio_noise_robustness.py` (monotonic dynamic weight = true).
 - [x] Verifikation Schritt 16: `pytest tests/test_reference_suite_real_world_extension.py tests/test_audio_quality.py tests/test_real_world_eval.py` + `reference_suite.py --profile quick` (Composite 519, extension `real_world_uncertainty` aktiv/reportiert).
 - [x] Verifikation Schritt 17 (Zwischenstand): `pytest tests/test_accuracy_robust_fallback.py tests/test_light_mapping.py` + `reference_suite.py --profile quick` mit Delta `extreme_visual_robustness 151 -> 184` und `composite 519 -> 533`.
 - [x] Schritt-17-Tuningversuch B (mehr aggressive Preprocess-Kandidaten) getestet und wegen Regression verworfen (`extreme_visual_robustness 184 -> 137`).
 - [x] Schritt-17-Stand wiederhergestellt auf bestes bekanntes Ergebnis nach Rollback (`reference_suite.py --profile quick`: Composite 533, Extreme 184, Test-Quality 1000).
+- [x] Schritt-17-Tuningversuch C (adaptive Low-Light-Kandidaten + luminanzadaptive Gate-Schwelle) stabil getestet, aber ohne Zusatzgewinn (bleibt Extreme 184).
+- [x] Schritt-17-Tuningversuch D (retinaface als globaler Detector) verworfen wegen deutlicher Regression (`reference_suite.py --profile quick --detector retinaface`: Composite 475, Extreme 103).
+- [x] Schritt-17-Tuningversuch E (Low-Quality Flip-TTA) stabil getestet, aber ohne Zusatzgewinn (bleibt Extreme 184).
 - [x] Benchmark-Nachlauf nach Plan-Update: `reference_suite.py --profile quick` (Composite 519, Trend +0, Gate FAIL wegen bekannter Baseline-Regressionsgrenze).
 - [x] Verifikation Schritt 15 (Zwischenstand): `reference_suite.py --profile quick` mehrfach stabil bei Composite 519; `delta_score_with_minus_without_face_mesh` auf `0.0` reduziert.
 - [x] Standard-Check aktualisiert: `reference_suite.py --profile standard --enforce-gate` -> Composite 527, Gate PASS, Trend +4 vs vorherigem comparable Standard-Lauf.

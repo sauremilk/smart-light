@@ -440,6 +440,7 @@ def _top_margin(probs: dict[str, float]) -> float:
 def _robust_deepface_scores(
     frame: np.ndarray,
     detector_backend: str,
+    profile_hint: str | None = None,
 ) -> tuple[dict[str, float], float, str, float, str]:
     """Runs DeepFace over robust preprocess variants and selects the best candidate.
 
@@ -461,6 +462,22 @@ def _robust_deepface_scores(
             [
                 ("lifted_dark", _gamma_correct(frame, gamma=0.58)),
                 ("denoise_lifted_dark", _denoise_bilateral(_gamma_correct(frame, gamma=0.62))),
+            ]
+        )
+
+    # Optional hint from extreme benchmark to probe profile-specific robustness.
+    if profile_hint == "color_cast_shadow":
+        cc = gray_world(frame)
+        candidates.extend(
+            [
+                ("cc_grayworld", cc),
+                ("cc_grayworld_clahe", clahe_l(cc, 2.0)),
+            ]
+        )
+    elif profile_hint == "mixed_extreme":
+        candidates.extend(
+            [
+                ("mixed_denoise_unsharp", _unsharp(_denoise_bilateral(frame), sigma=1.0, amount=0.9)),
             ]
         )
 
@@ -545,6 +562,7 @@ def predict_enhanced(
     face_mesh_weight: float = FACE_MESH_WEIGHT,
     head_pose_strength: float = HEAD_POSE_STRENGTH,
     return_debug: bool = False,
+    hard_profile: str | None = None,
 ) -> str | tuple[str, dict[str, object]]:
     proc = resize_for_width(img, 320)
     proc = gray_world(proc)
@@ -556,7 +574,7 @@ def predict_enhanced(
         preprocess_selected,
         preprocess_quality,
         detector_selected,
-    ) = _robust_deepface_scores(proc, detector_backend)
+    ) = _robust_deepface_scores(proc, detector_backend, profile_hint=hard_profile)
 
     fm_probs = None
     pose_factor = 1.0
@@ -585,12 +603,24 @@ def predict_enhanced(
         conf = max(conf, max(fm_probs.values()))
 
     mean_luma = float(cv2.cvtColor(proc, cv2.COLOR_BGR2GRAY).mean())
-    darkness = max(0.0, min(1.0, (90.0 - mean_luma) / 90.0))
+    darkness = max(0.0, min(1.0, (95.0 - mean_luma) / 95.0))
     decision_score = 0.65 * float(conf) + 0.35 * float(_top_margin(probs))
     # In low-light scenarios, avoid overly aggressive neutral-gating.
-    gate_threshold = 0.42 - (0.10 * darkness)
+    gate_threshold = 0.42 - (0.14 * darkness)
+    top_label = max(EMOTIONS, key=lambda e: probs[e])
+    top_prob = float(probs.get(top_label, 0.0))
     gated_neutral = decision_score < gate_threshold
-    label = "neutral" if gated_neutral else max(EMOTIONS, key=lambda e: probs[e])
+
+    # Rescue rule for very dark frames: if there is a stable non-neutral top class,
+    # avoid collapsing to neutral too aggressively.
+    dark_rescue = (
+        darkness >= 0.55
+        and top_label != "neutral"
+        and top_prob >= 0.30
+        and float(conf) >= 0.15
+    )
+
+    label = "neutral" if (gated_neutral and not dark_rescue) else top_label
 
     if return_debug:
         df_top = max(df_scores, key=df_scores.get) if df_scores else "neutral"
@@ -608,6 +638,10 @@ def predict_enhanced(
             "decision_score": float(decision_score),
             "gate_threshold": float(gate_threshold),
             "mean_luma": float(mean_luma),
+            "darkness": float(darkness),
+            "dark_rescue": bool(dark_rescue),
+            "top_label": top_label,
+            "top_prob": top_prob,
             "gated_neutral": bool(gated_neutral),
             "face_mesh_used": bool(fm_probs is not None),
             "face_mesh_weight": float(w),

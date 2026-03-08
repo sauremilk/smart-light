@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import subprocess
 import sys
 import time
@@ -25,7 +26,17 @@ ROOT = Path(__file__).resolve().parent
 
 def _run_cmd(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
     log.info("Running command: %s", " ".join(cmd))
-    proc = subprocess.run(cmd, cwd=str(cwd or ROOT), capture_output=True, text=True, check=False)
+    env = dict(os.environ)
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    env.setdefault("PYTHONUTF8", "1")
+    proc = subprocess.run(
+        cmd,
+        cwd=str(cwd or ROOT),
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
     if proc.stdout:
         log.info("stdout:\n%s", proc.stdout)
     if proc.stderr:

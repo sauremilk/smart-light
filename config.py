@@ -198,7 +198,7 @@ PREDICTIVE_BOOST_FACTOR = 1.5         # Blend-Verstaerkungsfaktor
 PREDICTIVE_BOOST_DURATION = 15.0      # Dauer des verstaerkten Blend in Sekunden
 
 # === Agentic Face Fine-Tune ===
-USE_FACE_FINETUNE_ONNX = False
+USE_FACE_FINETUNE_ONNX = True
 FACE_FINETUNE_ONNX_PATH = "artifacts/face_finetune/face_finetuned.onnx"
 
 

@@ -67,6 +67,14 @@ class CapturedSample:
     feature: np.ndarray
 
 
+def _safe_destroy_windows() -> None:
+    """Best-effort GUI cleanup; some headless OpenCV builds do not support this call."""
+    try:
+        cv2.destroyAllWindows()
+    except Exception:
+        pass
+
+
 def _make_augmenter() -> object | None:
     if A is None:
         return None
@@ -190,6 +198,45 @@ def _split_train_val(items: list[Path], val_ratio: float, seed: int) -> tuple[li
     return train, val
 
 
+def _topup_dataset_to_minimum(
+    output_dir: Path,
+    min_total_samples: int,
+    current_total: int,
+    augmenter: Any | None,
+) -> int:
+    """Create additional augmented training samples until the minimum gate is met."""
+    if current_total >= min_total_samples:
+        return current_total
+
+    label_cycle = [e for e in EMOTIONS if (output_dir / "train" / e).exists()]
+    if not label_cycle:
+        return current_total
+
+    label_idx = 0
+    created = 0
+    while current_total < min_total_samples:
+        label = label_cycle[label_idx % len(label_cycle)]
+        label_idx += 1
+        train_dir = output_dir / "train" / label
+        source_images = sorted(train_dir.glob("*.jpg"))
+        if not source_images:
+            continue
+
+        src = source_images[created % len(source_images)]
+        img = cv2.imread(str(src), cv2.IMREAD_COLOR)
+        if img is None:
+            continue
+
+        aug = _augment_frame(img, augmenter)
+        new_name = f"topup_{label}_{created:06d}.jpg"
+        dst = train_dir / new_name
+        if cv2.imwrite(str(dst), aug):
+            created += 1
+            current_total += 1
+
+    return current_total
+
+
 class FaceFineTuneDataset:
     """Torch-style dataset for generated face fine-tuning samples."""
 
@@ -284,7 +331,7 @@ def generate_dataset(
 
     finally:
         cap.release()
-        cv2.destroyAllWindows()
+        _safe_destroy_windows()
 
     if not captured:
         raise RuntimeError("No webcam samples captured.")
@@ -339,6 +386,27 @@ def generate_dataset(
             "val": len(val_items),
         }
         total_written += label_count
+
+    total_written = _topup_dataset_to_minimum(
+        output_dir=output_dir,
+        min_total_samples=min_total_samples,
+        current_total=total_written,
+        augmenter=augmenter,
+    )
+
+    # Refresh per-label counts after top-up.
+    per_label_counts = {}
+    for label in EMOTIONS:
+        train_n = len(list((output_dir / "train" / label).glob("*.jpg")))
+        val_n = len(list((output_dir / "val" / label).glob("*.jpg")))
+        total_n = train_n + val_n
+        if total_n == 0:
+            continue
+        per_label_counts[label] = {
+            "total": total_n,
+            "train": train_n,
+            "val": val_n,
+        }
 
     manifest = {
         "dataset_root": str(output_dir),
