@@ -22,15 +22,16 @@ import io
 import json
 import math
 import os
+import os as _os
 import random
+import sys as _sys
 import urllib.request
 from dataclasses import dataclass
 
 import cv2
 import numpy as np
 from deepface import DeepFace
-import sys as _sys
-import os as _os
+
 _ROOT = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), ".."))
 if _ROOT not in _sys.path:
     _sys.path.insert(0, _ROOT)
@@ -48,6 +49,7 @@ except Exception:
 
 try:
     import mediapipe as mp
+
     _HAS_MEDIAPIPE = True
 except Exception:
     mp = None
@@ -93,7 +95,9 @@ def create_face_mesh():
         except Exception:
             return None
 
+
 from config import EMOTIONS
+
 FER_TO_EMOTION = {
     0: "angry",
     1: "disgust",
@@ -114,14 +118,17 @@ FER_URLS = [
     "https://raw.githubusercontent.com/thoo/resnet-facial-expression/4fbccaeab264fe7a06ac3f49b62a32c7618fb22e/sample.csv",
 ]
 
-MODEL_POINTS = np.array([
-    (0.0, 0.0, 0.0),
-    (0.0, -330.0, -65.0),
-    (-225.0, 170.0, -135.0),
-    (225.0, 170.0, -135.0),
-    (-150.0, -150.0, -125.0),
-    (150.0, -150.0, -125.0),
-], dtype=np.float64)
+MODEL_POINTS = np.array(
+    [
+        (0.0, 0.0, 0.0),
+        (0.0, -330.0, -65.0),
+        (-225.0, 170.0, -135.0),
+        (225.0, 170.0, -135.0),
+        (-150.0, -150.0, -125.0),
+        (150.0, -150.0, -125.0),
+    ],
+    dtype=np.float64,
+)
 POSE_IDS = [1, 152, 33, 263, 61, 291]
 
 
@@ -356,9 +363,15 @@ def aus_to_emotions(aus: dict[str, float]) -> dict[str, float]:
     s = {}
     s["happy"] = min(100.0, (aus["AU6"] + aus["AU12"]) * 40.0)
     s["sad"] = min(100.0, (aus["AU1"] * 0.3 + aus["AU4"] * 0.3 + aus["AU15"] * 0.4) * 60.0)
-    s["angry"] = min(100.0, (aus["AU4"] * 0.5 + aus["AU9"] * 0.3) * 50.0 * max(0.2, 1.0 - aus["AU1"]))
-    s["fear"] = min(100.0, (aus["AU1"] * 0.3 + aus["AU2"] * 0.2 + aus["AU4"] * 0.2 + aus["AU20"] * 0.3) * 55.0)
-    s["surprise"] = min(100.0, (aus["AU1"] * 0.2 + aus["AU2"] * 0.2 + aus["AU25"] * 0.3 + aus["AU26"] * 0.3) * 50.0)
+    s["angry"] = min(
+        100.0, (aus["AU4"] * 0.5 + aus["AU9"] * 0.3) * 50.0 * max(0.2, 1.0 - aus["AU1"])
+    )
+    s["fear"] = min(
+        100.0, (aus["AU1"] * 0.3 + aus["AU2"] * 0.2 + aus["AU4"] * 0.2 + aus["AU20"] * 0.3) * 55.0
+    )
+    s["surprise"] = min(
+        100.0, (aus["AU1"] * 0.2 + aus["AU2"] * 0.2 + aus["AU25"] * 0.3 + aus["AU26"] * 0.3) * 50.0
+    )
     s["disgust"] = min(100.0, (aus["AU9"] * 0.5 + aus["AU15"] * 0.5) * 55.0)
     total_au = sum(aus.values())
     s["neutral"] = max(0.0, 100.0 - total_au * 15.0)
@@ -506,7 +519,10 @@ def _robust_deepface_scores(
         cc = gray_world(frame)
         candidates.extend(
             [
-                ("mixed_denoise_unsharp", _unsharp(_denoise_bilateral(frame), sigma=1.0, amount=0.9)),
+                (
+                    "mixed_denoise_unsharp",
+                    _unsharp(_denoise_bilateral(frame), sigma=1.0, amount=0.9),
+                ),
                 ("mixed_lift_denoise", _denoise_bilateral(lifted)),
                 ("mixed_cc_clahe", clahe_l(cc, 3.5)),
             ]
@@ -563,7 +579,7 @@ def _robust_deepface_scores(
     if len(all_results) >= 3 and best_quality < 0.75:
         # Sort by quality descending and take top-K.
         all_results.sort(key=lambda r: r[2], reverse=True)
-        top_k = all_results[:min(4, len(all_results))]
+        top_k = all_results[: min(4, len(all_results))]
         total_w = sum(r[2] for r in top_k)
         if total_w > 0:
             ensemble_scores: dict[str, float] = {e: 0.0 for e in EMOTIONS}
@@ -593,7 +609,9 @@ def _robust_deepface_scores(
             if s > 0:
                 merged_probs = {e: merged_probs[e] / s for e in EMOTIONS}
                 best_scores = {e: 100.0 * merged_probs[e] for e in EMOTIONS}
-                best_conf = max(float(best_conf), float(flip_conf), float(max(merged_probs.values())))
+                best_conf = max(
+                    float(best_conf), float(flip_conf), float(max(merged_probs.values()))
+                )
         except Exception:
             pass
 
@@ -673,10 +691,7 @@ def predict_enhanced(
     # Rescue rule for very dark frames: if there is a stable non-neutral top class,
     # avoid collapsing to neutral too aggressively.
     dark_rescue = (
-        darkness >= 0.45
-        and top_label != "neutral"
-        and top_prob >= 0.25
-        and float(conf) >= 0.10
+        darkness >= 0.45 and top_label != "neutral" and top_prob >= 0.25 and float(conf) >= 0.10
     )
 
     label = "neutral" if (gated_neutral and not dark_rescue) else top_label
@@ -849,7 +864,9 @@ def run(
             "initialized": bool(face_mesh is not None),
             "frames_checked": fm_frames_total,
             "frames_with_landmarks": fm_frames_detected,
-            "landmark_ratio": (fm_frames_detected / fm_frames_total) if fm_frames_total > 0 else 0.0,
+            "landmark_ratio": (fm_frames_detected / fm_frames_total)
+            if fm_frames_total > 0
+            else 0.0,
         },
         "baseline": {
             "accuracy": base_acc,
@@ -916,9 +933,15 @@ def main():
 
     print("\n=== Accuracy Benchmark ===")
     print(f"Samples: {report['samples']} (failed={report['skipped_or_failed']})")
-    print(f"Baseline  acc={report['baseline']['accuracy']:.4f}  f1={report['baseline']['macro_f1']:.4f}")
-    print(f"Enhanced  acc={report['enhanced']['accuracy']:.4f}  f1={report['enhanced']['macro_f1']:.4f}")
-    print(f"Delta     acc={report['delta']['accuracy']:+.4f}  f1={report['delta']['macro_f1']:+.4f}")
+    print(
+        f"Baseline  acc={report['baseline']['accuracy']:.4f}  f1={report['baseline']['macro_f1']:.4f}"
+    )
+    print(
+        f"Enhanced  acc={report['enhanced']['accuracy']:.4f}  f1={report['enhanced']['macro_f1']:.4f}"
+    )
+    print(
+        f"Delta     acc={report['delta']['accuracy']:+.4f}  f1={report['delta']['macro_f1']:+.4f}"
+    )
     print(f"Report: {out_path}")
 
 

@@ -46,6 +46,4 @@ def resize_for_width(frame, target_width: int):
     if w <= target_width:
         return frame
     scale = target_width / float(w)
-    return cv2.resize(
-        frame, (target_width, max(1, int(h * scale))), interpolation=cv2.INTER_AREA
-    )
+    return cv2.resize(frame, (target_width, max(1, int(h * scale))), interpolation=cv2.INTER_AREA)

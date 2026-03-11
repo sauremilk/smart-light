@@ -19,6 +19,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
 import cv2
 import numpy as np
 from deepface import DeepFace
@@ -44,12 +45,14 @@ except Exception:
     torch = None
 
 
-import sys as _sys
 import os as _os
+import sys as _sys
+
 _ROOT = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), ".."))
 if _ROOT not in _sys.path:
     _sys.path.insert(0, _ROOT)
 from config import EMOTIONS
+
 VOICE_DE = {
     "angry": "Bitte zeige Wut fuer zwanzig Sekunden.",
     "disgust": "Bitte zeige Ekel fuer zwanzig Sekunden.",
@@ -193,7 +196,9 @@ def _augment_frame(frame: np.ndarray, augmenter: Any | None) -> np.ndarray:
     return out
 
 
-def _split_train_val(items: list[Path], val_ratio: float, seed: int) -> tuple[list[Path], list[Path]]:
+def _split_train_val(
+    items: list[Path], val_ratio: float, seed: int
+) -> tuple[list[Path], list[Path]]:
     rng = random.Random(seed)
     shuffled = list(items)
     rng.shuffle(shuffled)
@@ -345,7 +350,9 @@ def generate_dataset(
 
     grouped_paths: dict[str, list[Path]] = defaultdict(list)
     for idx, sample in enumerate(captured):
-        base_label = sample.pseudo_label if sample.pseudo_label in EMOTIONS else sample.expected_label
+        base_label = (
+            sample.pseudo_label if sample.pseudo_label in EMOTIONS else sample.expected_label
+        )
         label_dir = raw_dir / base_label
         label_dir.mkdir(parents=True, exist_ok=True)
 
@@ -441,12 +448,24 @@ def generate_dataset(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Agentic webcam dataset generation for face fine-tuning.")
-    parser.add_argument("--output-dir", default="dataset/face_finetune", help="Output dataset root directory.")
-    parser.add_argument("--min-total-samples", type=int, default=1000, help="Gate threshold for total samples.")
-    parser.add_argument("--samples-per-emotion", type=int, default=160, help="Raw capture target per emotion.")
-    parser.add_argument("--seconds-per-emotion", type=float, default=20.0, help="Capture duration per emotion.")
-    parser.add_argument("--augmentations-per-sample", type=int, default=0, help="Augmented variants per sample.")
+    parser = argparse.ArgumentParser(
+        description="Agentic webcam dataset generation for face fine-tuning."
+    )
+    parser.add_argument(
+        "--output-dir", default="dataset/face_finetune", help="Output dataset root directory."
+    )
+    parser.add_argument(
+        "--min-total-samples", type=int, default=1000, help="Gate threshold for total samples."
+    )
+    parser.add_argument(
+        "--samples-per-emotion", type=int, default=160, help="Raw capture target per emotion."
+    )
+    parser.add_argument(
+        "--seconds-per-emotion", type=float, default=20.0, help="Capture duration per emotion."
+    )
+    parser.add_argument(
+        "--augmentations-per-sample", type=int, default=0, help="Augmented variants per sample."
+    )
     parser.add_argument("--val-ratio", type=float, default=0.2, help="Validation split ratio.")
     parser.add_argument("--detector-backend", default="opencv", help="DeepFace detector backend.")
     parser.add_argument("--webcam-index", type=int, default=0, help="Webcam index.")

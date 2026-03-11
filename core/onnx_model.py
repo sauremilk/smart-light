@@ -34,9 +34,7 @@ class OnnxEmotionModel:
     def __init__(self, model_path: str):
         if ort is None:
             raise RuntimeError("onnxruntime is not available")
-        self._session = ort.InferenceSession(
-            model_path, providers=["CPUExecutionProvider"]
-        )
+        self._session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
         self._input_name = self._session.get_inputs()[0].name
 
     def analyze(self, frame: np.ndarray) -> dict:
@@ -47,9 +45,7 @@ class OnnxEmotionModel:
         logits = self._session.run(None, {self._input_name: x})[0]
         probs = _softmax(logits[0])
 
-        scores = {
-            label: float(probs[i] * 100.0) for i, label in enumerate(self._labels)
-        }
+        scores = {label: float(probs[i] * 100.0) for i, label in enumerate(self._labels)}
         dominant = max(scores, key=scores.get)
         return {"emotion": scores, "dominant_emotion": dominant}
 
@@ -69,7 +65,5 @@ def init_optional_onnx_model() -> OnnxEmotionModel | None:
         log.info("ONNX emotion backend active: %s", FACE_FINETUNE_ONNX_PATH)
         return model
     except Exception as exc:
-        log.warning(
-            "Failed to initialize ONNX backend (%s). Falling back to DeepFace.", exc
-        )
+        log.warning("Failed to initialize ONNX backend (%s). Falling back to DeepFace.", exc)
         return None

@@ -136,23 +136,15 @@ class EmotionAnalyzer:
         if not filtered:
             return 0.0, 0.0
         total = sum(filtered.values())
-        valence = sum(
-            (w / total) * VALENCE_AROUSAL_MAP[e]["valence"] for e, w in filtered.items()
-        )
-        arousal = sum(
-            (w / total) * VALENCE_AROUSAL_MAP[e]["arousal"] for e, w in filtered.items()
-        )
+        valence = sum((w / total) * VALENCE_AROUSAL_MAP[e]["valence"] for e, w in filtered.items())
+        arousal = sum((w / total) * VALENCE_AROUSAL_MAP[e]["arousal"] for e, w in filtered.items())
         return valence, arousal
 
     def _compute_trend(self) -> float:
         """Berechnet Valence-Trend (Differenz zum vorherigen EMA)."""
-        v_now = sum(
-            self._ema.get(e, 0) * VALENCE_AROUSAL_MAP[e]["valence"]
-            for e in self._EMOTIONS
-        )
+        v_now = sum(self._ema.get(e, 0) * VALENCE_AROUSAL_MAP[e]["valence"] for e in self._EMOTIONS)
         v_prev = sum(
-            self._ema_prev.get(e, 0) * VALENCE_AROUSAL_MAP[e]["valence"]
-            for e in self._EMOTIONS
+            self._ema_prev.get(e, 0) * VALENCE_AROUSAL_MAP[e]["valence"] for e in self._EMOTIONS
         )
         return v_now - v_prev
 

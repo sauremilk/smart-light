@@ -46,9 +46,7 @@ class HueController:
         # Alle Lampen einschalten
         for lid in self.lids:
             self.bridge.set_light(lid, "on", True)
-        log.info(
-            "Hue Bridge verbunden, %d Lampen aktiviert: %s", len(self.lids), self.lids
-        )
+        log.info("Hue Bridge verbunden, %d Lampen aktiviert: %s", len(self.lids), self.lids)
 
     def _record(self, **kwargs):
         if self._telemetry is not None:

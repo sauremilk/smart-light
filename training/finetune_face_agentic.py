@@ -21,8 +21,9 @@ from pathlib import Path
 
 log = logging.getLogger("agentic-finetune")
 
-import sys as _sys
 import os as _os
+import sys as _sys
+
 _ROOT = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), ".."))
 if _ROOT not in _sys.path:
     _sys.path.insert(0, _ROOT)
@@ -43,7 +44,9 @@ def _has_command(name: str) -> bool:
     return shutil.which(name) is not None
 
 
-def _run_autotrain(dataset_dir: Path, output_dir: Path, lr: float, epochs: int, batch_size: int) -> tuple[float, Path]:
+def _run_autotrain(
+    dataset_dir: Path, output_dir: Path, lr: float, epochs: int, batch_size: int
+) -> tuple[float, Path]:
     project_name = "face_finetuned_agentic"
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -241,7 +244,9 @@ def run_training(
 
     if backend == "autotrain":
         try:
-            val_acc, model_path = _run_autotrain(dataset_dir, output_dir, lr=lr, epochs=epochs, batch_size=batch_size)
+            val_acc, model_path = _run_autotrain(
+                dataset_dir, output_dir, lr=lr, epochs=epochs, batch_size=batch_size
+            )
             if not model_path.exists():
                 raise RuntimeError("AutoTrain did not produce a model artifact.")
             onnx_path = output_dir / "face_finetuned.onnx"
@@ -285,14 +290,26 @@ def run_training(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Agentic face fine-tuning pipeline.")
-    parser.add_argument("--dataset-dir", default="dataset/face_finetune", help="Dataset root containing train/val.")
-    parser.add_argument("--output-dir", default="artifacts/face_finetune", help="Training artifact output directory.")
-    parser.add_argument("--config-path", default="config.py", help="Path to config.py for ONNX auto-update.")
-    parser.add_argument("--target-val-acc", type=float, default=0.82, help="Early-stop target validation accuracy.")
+    parser.add_argument(
+        "--dataset-dir", default="dataset/face_finetune", help="Dataset root containing train/val."
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="artifacts/face_finetune",
+        help="Training artifact output directory.",
+    )
+    parser.add_argument(
+        "--config-path", default="config.py", help="Path to config.py for ONNX auto-update."
+    )
+    parser.add_argument(
+        "--target-val-acc", type=float, default=0.82, help="Early-stop target validation accuracy."
+    )
     parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate.")
     parser.add_argument("--epochs", type=int, default=10, help="Max epochs.")
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size.")
-    parser.add_argument("--backend", choices=["autotrain", "torch"], default=None, help="Force training backend.")
+    parser.add_argument(
+        "--backend", choices=["autotrain", "torch"], default=None, help="Force training backend."
+    )
     return parser.parse_args()
 
 

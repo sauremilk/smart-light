@@ -187,9 +187,9 @@ def run_eval(paths: list[str], low_conf_threshold: float) -> dict:
     records = _load_jsonl(paths)
 
     valid = [
-        r for r in records
-        if r.get("ground_truth_emotion") in EMOTIONS
-        and r.get("predicted_emotion") in EMOTIONS
+        r
+        for r in records
+        if r.get("ground_truth_emotion") in EMOTIONS and r.get("predicted_emotion") in EMOTIONS
     ]
 
     accuracy = _accuracy(valid)
@@ -215,8 +215,18 @@ def run_eval(paths: list[str], low_conf_threshold: float) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Real-world emotion evaluation")
     parser.add_argument("--input", nargs="*", default=None, help="Input JSONL file(s)")
-    parser.add_argument("--glob", nargs="*", default=None, help="Input glob(s), e.g. benchmarks/results/real_world/*.jsonl")
-    parser.add_argument("--low-conf-threshold", type=float, default=0.45, help="Confidence threshold for low/high split")
+    parser.add_argument(
+        "--glob",
+        nargs="*",
+        default=None,
+        help="Input glob(s), e.g. benchmarks/results/real_world/*.jsonl",
+    )
+    parser.add_argument(
+        "--low-conf-threshold",
+        type=float,
+        default=0.45,
+        help="Confidence threshold for low/high split",
+    )
     parser.add_argument(
         "--output",
         default=os.path.join("benchmarks", "results", "real_world_eval_latest.json"),

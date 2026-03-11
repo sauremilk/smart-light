@@ -8,10 +8,12 @@ und ein Offset-Vektor berechnet, der spaeter auf die Live-Erkennung angewendet w
 import json
 import logging
 import time
+
 import cv2
 from deepface import DeepFace
-from config import EMOTIONS
+
 import config
+from config import EMOTIONS
 
 log = logging.getLogger("emotion-light.calibration")
 LABEL_DE = {
