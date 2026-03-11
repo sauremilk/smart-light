@@ -1,5 +1,16 @@
 """Zentrale Konfiguration für das Emotion-Light-System."""
 
+# === Kanonische Emotionsliste (Single Source of Truth) ===
+EMOTIONS: tuple[str, ...] = (
+    "angry",
+    "disgust",
+    "fear",
+    "happy",
+    "sad",
+    "surprise",
+    "neutral",
+)
+
 # === Hardware ===
 WEBCAM_INDEX = 0  # USB-Webcam Device-Index (1920x1080 erkannt)
 HUE_BRIDGE_IP = "192.168.178.20"  # IP der Philips Hue Bridge
@@ -267,6 +278,30 @@ PROSODIC_PITCH_CALM_HZ = 120.0  # Mittlere F0 unter diesem Wert = ruhiger Zustan
 PROSODIC_AROUSAL_INFLUENCE = 0.08  # Gewicht prosodischer Merkmale auf Arousal
 PROSODIC_SPEECH_RATE_HIGH = 6.0  # Onsets/s ueber diesem Wert = schnelles Sprechen
 PROSODIC_SPEECH_RATE_LOW = 2.0  # Onsets/s unter diesem Wert = langsames Sprechen
+
+# === Kognitiver Zustandsklassifikator ===
+USE_COGNITIVE_CLASSIFIER = True  # Kognitive Zustandserkennung aktivieren
+COGNITIVE_STABILITY_WINDOW = 30.0  # Sekunden Stabilitaetsfenster fuer Zustandswechsel
+
+# === Modus-System ===
+USE_MODE_SYSTEM = True  # Zielgerichtete Optimierungsmodi aktivieren
+DEFAULT_MODE = "AUTO"  # Startmodus: AUTO | FOCUS | ENERGY | RELAX | RECOVERY
+MODE_HYSTERESIS_S = 15.0  # Sekunden bis automatischer Moduswechsel
+
+# === Pausen-Manager ===
+USE_BREAK_MANAGER = True  # Pausenempfehlungen aktivieren
+BREAK_MAX_WORK_MINUTES = 50.0  # Maximale Arbeitszeit ohne Pause
+BREAK_FATIGUE_TRIGGER_S = 120.0  # Sekunden Muedigkeit bis Pause empfohlen
+BREAK_MIN_MINUTES = 5.0  # Mindest-Pausendauer
+BREAK_POMODORO_ENABLED = False  # Pomodoro-Modus aktivieren
+BREAK_POMODORO_WORK_MINUTES = 25.0  # Arbeitsphase Pomodoro
+BREAK_POMODORO_BREAK_MINUTES = 5.0  # Pausenphase Pomodoro
+BREAK_POMODORO_LONG_BREAK_MINUTES = 15.0  # Lange Pause Pomodoro
+BREAK_POMODORO_LONG_BREAK_AFTER = 4  # Zyklen bis lange Pause
+
+# === Feedback-System ===
+USE_FEEDBACK = True  # Benutzer-Feedback via Tastendruck aktivieren
+FEEDBACK_COOLDOWN_S = 3.0  # Sekunden Cooldown zwischen Feedback-Aktionen
 
 # === Agentic Face Fine-Tune ===
 USE_FACE_FINETUNE_ONNX = True

@@ -102,6 +102,14 @@ from config import (
     BLINK_RATE_FATIGUE_THRESHOLD,
     BLINK_RATE_FOCUS_THRESHOLD,
     BLINK_VALENCE_INFLUENCE,
+    BREAK_FATIGUE_TRIGGER_S,
+    BREAK_MAX_WORK_MINUTES,
+    BREAK_MIN_MINUTES,
+    BREAK_POMODORO_BREAK_MINUTES,
+    BREAK_POMODORO_ENABLED,
+    BREAK_POMODORO_LONG_BREAK_AFTER,
+    BREAK_POMODORO_LONG_BREAK_MINUTES,
+    BREAK_POMODORO_WORK_MINUTES,
     BREATHING_AROUSAL_INFLUENCE,
     BREATHING_BASELINE_ADAPT_ALPHA,
     BREATHING_BASELINE_SECONDS,
@@ -121,16 +129,20 @@ from config import (
     CAMERA_BUFFER_SIZE,
     CIRCADIAN_UPDATE_INTERVAL,
     CLAHE_CLIP_LIMIT,
+    COGNITIVE_STABILITY_WINDOW,
+    DEFAULT_MODE,
     DETECTOR_BACKEND,
     EMA_ALPHA,
     EMA_MIN_WEIGHT,
     EMOTION_MAP,
+    EMOTIONS,
     FACE_FINETUNE_ONNX_PATH,
     FACE_MESH_FRAME_SIZE,
     FACE_MESH_WEIGHT,
     FALLBACK_AFTER_SECONDS,
     FALLBACK_DECAY,
     FALLBACK_LIGHT,
+    FEEDBACK_COOLDOWN_S,
     FRAME_HEIGHT,
     FRAME_WIDTH,
     HEAD_POSE_CONFIDENCE_STRENGTH,
@@ -159,6 +171,7 @@ from config import (
     MIN_ANALYSIS_EVERY_N_FRAMES,
     MIN_CONFIDENCE,
     MIN_RUNTIME_FPS,
+    MODE_HYSTERESIS_S,
     POSE_FRAME_SIZE,
     POSE_WEIGHT,
     PREDICTIVE_BOOST_DURATION,
@@ -185,15 +198,19 @@ from config import (
     USE_ACTIVITY_MONITOR,
     USE_ALEXA,
     USE_AUDIO,
+    USE_BREAK_MANAGER,
     USE_BREATHING,
     USE_BREATHING_PACER,
     USE_CIRCADIAN,
+    USE_COGNITIVE_CLASSIFIER,
     USE_COLOR_CONSTANCY,
     USE_EXTENDED_POSE,
     USE_FACE_FINETUNE_ONNX,
     USE_FACE_MESH,
+    USE_FEEDBACK,
     USE_HEAD_POSE_CONFIDENCE,
     USE_HRV,
+    USE_MODE_SYSTEM,
     USE_POSE,
     USE_PROSODIC,
     USE_PUPIL_BLINK,
@@ -208,7 +225,9 @@ from config import (
     VALENCE_AROUSAL_MAP,
     WEBCAM_INDEX,
 )
+from core.break_manager import BreakManager
 from core.circadian import CircadianSchedule
+from core.cognitive_state import CognitiveClassifier
 from core.ema_utils import normalize_vector_inplace, update_ema_vector_inplace
 from core.emotion_regulator import EmotionRegulator
 from core.error_taxonomy import (
@@ -227,6 +246,7 @@ from core.error_taxonomy import (
     POSE_ANALYZER_INIT_FAILED,
     category_for_error_code,
 )
+from core.feedback import FeedbackCollector
 from core.light_mapping import (
     BreathingPacer,
     blend_emotion_colors,
@@ -235,6 +255,7 @@ from core.light_mapping import (
     fuse_modalities,
     valence_arousal_to_light,
 )
+from core.mode_manager import ModeManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -284,7 +305,7 @@ except Exception:
 class OnnxEmotionModel:
     """ONNX-backed emotion classifier with DeepFace-compatible output shape."""
 
-    _labels = ("angry", "disgust", "fear", "happy", "sad", "surprise", "neutral")
+    _labels = EMOTIONS
 
     def __init__(self, model_path: str):
         if ort is None:
@@ -957,6 +978,32 @@ def _parse_args():
         "--no-extended-pose",
         action="store_true",
         help="Erweiterte Koerpersprache-Signale deaktivieren",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["AUTO", "FOCUS", "ENERGY", "RELAX", "RECOVERY"],
+        default=None,
+        help="Optimierungsmodus setzen (ueberschreibt config.py DEFAULT_MODE)",
+    )
+    parser.add_argument(
+        "--no-cognitive",
+        action="store_true",
+        help="Kognitiven Zustandsklassifikator deaktivieren",
+    )
+    parser.add_argument(
+        "--no-breaks",
+        action="store_true",
+        help="Pausen-Manager deaktivieren",
+    )
+    parser.add_argument(
+        "--pomodoro",
+        action="store_true",
+        help="Pomodoro-Modus aktivieren (25/5-Zyklen)",
+    )
+    parser.add_argument(
+        "--no-feedback",
+        action="store_true",
+        help="Benutzer-Feedback-System deaktivieren",
     )
     parser.add_argument(
         "--calibrate",
@@ -1879,6 +1926,48 @@ def main():
         if USE_BREATHING_PACER
         else None
     )
+
+    # --- Kognitiver Zustandsklassifikator (optional) ---
+    cognitive_classifier = None
+    use_cognitive = USE_COGNITIVE_CLASSIFIER and not args.no_cognitive
+    if use_cognitive:
+        cognitive_classifier = CognitiveClassifier(
+            stability_window_s=COGNITIVE_STABILITY_WINDOW
+        )
+        log.info("Kognitiver Zustandsklassifikator aktiviert.")
+
+    # --- Modus-System (optional) ---
+    mode_manager = None
+    use_modes = USE_MODE_SYSTEM and not args.no_cognitive  # benoetigt Klassifikator fuer AUTO
+    if use_modes:
+        initial_mode = args.mode or DEFAULT_MODE
+        mode_manager = ModeManager(initial_mode=initial_mode)
+        mode_manager._hysteresis_s = MODE_HYSTERESIS_S
+        log.info("Modus-System aktiviert (Start: %s).", initial_mode)
+
+    # --- Pausen-Manager (optional) ---
+    break_manager = None
+    use_breaks = USE_BREAK_MANAGER and not args.no_breaks
+    if use_breaks:
+        pomo = BREAK_POMODORO_ENABLED or args.pomodoro
+        break_manager = BreakManager(
+            max_work_minutes=BREAK_MAX_WORK_MINUTES,
+            fatigue_trigger_s=BREAK_FATIGUE_TRIGGER_S,
+            min_break_minutes=BREAK_MIN_MINUTES,
+            pomodoro_enabled=pomo,
+            pomodoro_work_minutes=BREAK_POMODORO_WORK_MINUTES,
+            pomodoro_break_minutes=BREAK_POMODORO_BREAK_MINUTES,
+            pomodoro_long_break_minutes=BREAK_POMODORO_LONG_BREAK_MINUTES,
+            pomodoro_long_break_after=BREAK_POMODORO_LONG_BREAK_AFTER,
+        )
+        log.info("Pausen-Manager aktiviert (Pomodoro: %s).", "ja" if pomo else "nein")
+
+    # --- Feedback-Collector (optional) ---
+    feedback_collector = None
+    use_feedback = USE_FEEDBACK and not args.no_feedback
+    if use_feedback:
+        feedback_collector = FeedbackCollector(cooldown_s=FEEDBACK_COOLDOWN_S)
+        log.info("Feedback-System aktiviert (Tasten: f=positiv, d=negativ).")
 
     # Vorausschauende Intervention: Trend-Zaehler
     trend_negative_counter = 0.0

@@ -93,7 +93,7 @@ def create_face_mesh():
         except Exception:
             return None
 
-EMOTIONS = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
+from config import EMOTIONS
 FER_TO_EMOTION = {
     0: "angry",
     1: "disgust",

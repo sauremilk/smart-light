@@ -44,7 +44,12 @@ except Exception:
     torch = None
 
 
-EMOTIONS = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
+import sys as _sys
+import os as _os
+_ROOT = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), ".."))
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
+from config import EMOTIONS
 VOICE_DE = {
     "angry": "Bitte zeige Wut fuer zwanzig Sekunden.",
     "disgust": "Bitte zeige Ekel fuer zwanzig Sekunden.",

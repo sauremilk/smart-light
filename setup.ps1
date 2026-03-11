@@ -16,7 +16,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = $PSScriptRoot
-$VenvPath    = Join-Path $ProjectRoot "venv"
+$VenvPath    = Join-Path $ProjectRoot ".venv"
 $PythonExe   = Join-Path $VenvPath "Scripts\python.exe"
 $PipExe      = Join-Path $VenvPath "Scripts\pip.exe"
 $ReqFile     = Join-Path $ProjectRoot "requirements.txt"

@@ -15,8 +15,7 @@ import statistics
 import time
 from collections import defaultdict
 
-
-EMOTIONS = ["happy", "sad", "angry", "fear", "surprise", "disgust", "neutral"]
+from config import EMOTIONS
 
 
 def _clamp01(value: float) -> float:

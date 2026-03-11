@@ -16,8 +16,13 @@ HUE_LIGHT_ROLES = {
 # Beispiel: Alexa-Steuerung aktivieren
 # Muss ausgefuellt werden bevor USE_ALEXA = True gesetzt wird.
 USE_ALEXA = False
-ALEXA_EMAIL = "deine@email.de"  # Amazon-Konto E-Mail
-ALEXA_PASSWORD = "deinPasswort"  # Amazon-Konto Passwort
+# Credentials via Umgebungsvariablen (empfohlen) oder direkt setzen:
+import os
+
+ALEXA_EMAIL = os.environ.get("SMART_LIGHT_ALEXA_EMAIL", "")  # Amazon-Konto E-Mail
+ALEXA_PASSWORD = os.environ.get(
+    "SMART_LIGHT_ALEXA_PASSWORD", ""
+)  # Amazon-Konto Passwort
 ALEXA_DEVICE_NAME = "Michs Echo"  # Gerätename exakt wie in Alexa-App
 ALEXA_AMAZON_URL = "amazon.de"  # amazon.de fuer Deutschland
 

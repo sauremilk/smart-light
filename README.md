@@ -19,18 +19,21 @@ Multimodale, lokale KI-Emotionserkennung via **Webcam + Mikrofon + Körpersprach
 - **Multimodale Fusion** – Video + Audio + Pose werden gewichtet zusammengeführt
 - **Nutzer-Kalibrierung** – 7-Emotionen-Kalibrierung gleicht individuelle Erkennungsabweichungen aus
 - **Multi-Lampen-Support** – steuert beliebig viele Hue-Lampen gleichzeitig
+- **Optionale Alexa-Integration** – emotionsabhaengige Musik-/Lautstaerkesteuerung (inoffiziell via alexapy)
+
+Weitere Details: `docs/ALEXA_INTEGRATION.md`
 
 ---
 
 ## Voraussetzungen
 
-| Komponente | Version |
-|---|---|
-| Python | 3.10+ |
-| Philips Hue Bridge | v2 (API v1) |
-| USB-Webcam | beliebig |
-| Mikrofon | optional (für Audio-Modul) |
-| Betriebssystem | Windows 10/11 oder Linux |
+| Komponente         | Version                    |
+| ------------------ | -------------------------- |
+| Python             | 3.10+                      |
+| Philips Hue Bridge | v2 (API v1)                |
+| USB-Webcam         | beliebig                   |
+| Mikrofon           | optional (für Audio-Modul) |
+| Betriebssystem     | Windows 10/11 oder Linux   |
 
 ---
 
@@ -97,16 +100,17 @@ Alternativ kannst du direkt `config.py` bearbeiten.
 
 ## CLI-Optionen
 
-| Option | Beschreibung |
-|---|---|
-| `--mock` | Simuliert Webcam und Hue-Bridge (kein Hardware nötig) |
-| `--no-audio` | Audio-Emotionserkennung deaktivieren |
-| `--no-pose` | Körpersprache-Analyse deaktivieren |
-| `--calibrate` | Interaktive Kalibrierung starten (7 × 10s) |
-| `--calibration-file PATH` | Alternativen Kalibrierungsdatei-Pfad angeben |
-| `--bridge-ip IP` | Bridge-IP überschreiben |
-| `--light-ids IDs` | Lampen-IDs überschreiben (z.B. `2,3,4`) |
-| `--pseudonymize-session` | Pseudonymisiert `participant`/`session_id` im Session-Log |
+| Option                    | Beschreibung                                              |
+| ------------------------- | --------------------------------------------------------- |
+| `--mock`                  | Simuliert Webcam und Hue-Bridge (kein Hardware nötig)     |
+| `--no-audio`              | Audio-Emotionserkennung deaktivieren                      |
+| `--no-pose`               | Körpersprache-Analyse deaktivieren                        |
+| `--no-alexa`              | Alexa-Steuerung deaktivieren (auch wenn `USE_ALEXA=True`) |
+| `--calibrate`             | Interaktive Kalibrierung starten (7 × 10s)                |
+| `--calibration-file PATH` | Alternativen Kalibrierungsdatei-Pfad angeben              |
+| `--bridge-ip IP`          | Bridge-IP überschreiben                                   |
+| `--light-ids IDs`         | Lampen-IDs überschreiben (z.B. `2,3,4`)                   |
+| `--pseudonymize-session`  | Pseudonymisiert `participant`/`session_id` im Session-Log |
 
 ---
 
@@ -131,22 +135,25 @@ Für einen bewusst sehr schwierigen, reproduzierbaren Referenztest (als fixer Ve
 ```
 
 Der Report wird nach `benchmarks/results/extreme_reference.json` geschrieben und enthält:
+
 - `enhanced.index` als kompakten Referenz-Score (0-1000)
 - `delta.index` als Verbesserung gegenüber Baseline
 - `hardness.hardest_profile` als aktuell schwierigstes Störungsprofil
 
 Formeln (explizit):
 
-| Metrik | Formel | Zweck |
-|---|---|---|
-| `weighted_score` | `0.4 * accuracy + 0.6 * macro_f1` | Balance zwischen Genauigkeit und Klassenfairness |
-| `index` | `round(clamp01(weighted_score) * 1000)` | Kompakter Vergleichswert (0-1000) |
+| Metrik           | Formel                                  | Zweck                                            |
+| ---------------- | --------------------------------------- | ------------------------------------------------ |
+| `weighted_score` | `0.4 * accuracy + 0.6 * macro_f1`       | Balance zwischen Genauigkeit und Klassenfairness |
+| `index`          | `round(clamp01(weighted_score) * 1000)` | Kompakter Vergleichswert (0-1000)                |
 
 Zusatz im Report:
+
 - `relative.enhanced_percent_of_baseline.*` gibt `%` relativ zur Baseline aus (z.B. `index`).
 
 Die Störprofile sind deterministisch definiert und im Report unter
 `profile_specs` dokumentiert (inkl. Parameterbereiche):
+
 - `low_light_noise`: Gamma-Verdunkelung + Helligkeitsabfall + Gauß-Rauschen
 - `motion_blur`: Richtungsunschärfe + leichte Gauß-Unschärfe
 - `jpeg_artifacts`: niedrige JPEG-Qualität + Down/Up-Sampling
@@ -164,6 +171,7 @@ Schneller Smoke-Test:
 ### Professionelle Referenz-Suite (empfohlen für Agenten + Releases)
 
 Die Datei `benchmarks/reference_suite.py` kombiniert mehrere Säulen in einem Lauf:
+
 - `extreme_visual_robustness` (harte Bildstörungen)
 - `multi_seed_stability` (Seed-Varianz und Robustheit)
 - `test_quality` (Projekt-Tests)
@@ -174,10 +182,10 @@ Damit sind Verbesserungen nur dann gültig, wenn das Gesamtsystem besser wird un
 
 Scoring-Modell (transparent):
 
-| Metrik | Formel |
-|---|---|
+| Metrik              | Formel                                                                                                                             |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `composite_score01` | `0.40 * extreme_visual_robustness + 0.23 * multi_seed_stability + 0.17 * test_quality + 0.10 * module_sanity + 0.10 * e2e_runtime` |
-| `composite_index` | `round(clamp01(composite_score01) * 1000)` |
+| `composite_index`   | `round(clamp01(composite_score01) * 1000)`                                                                                         |
 
 `multi_seed_stability` nutzt explizit eine Varianzstrafe:
 
@@ -203,10 +211,12 @@ stability_score01 = clamp01(mean(enhanced_weighted_score) - 0.5 * std(enhanced_w
 ```
 
 Hinweis:
+
 - `--skip-e2e` und `--skip-tests` sind nur fuer lokale Iteration gedacht.
 - Mit `--enforce-gate` sind diese Flags absichtlich nicht kombinierbar.
 
 Ausgabe:
+
 - `benchmarks/results/reference_suite_latest.json`
 - Optionales Baseline-File: `benchmarks/results/reference_suite_baseline.json`
 - Historie aller Runs: `benchmarks/results/reference_suite_history.jsonl`
@@ -214,6 +224,7 @@ Ausgabe:
 Der `latest`-Report enthält zusätzlich einen `trend`-Block mit Delta gegen den letzten vergleichbaren Run
 (bevorzugt gleiches Profil + gleicher Detector).
 Zusätzlich enthält er:
+
 - `environment`: OS/Python/Library-Versionen + CUDA/GPU-Metadaten (falls vorhanden)
 - `runtime`: Gesamtlaufzeit und Laufzeit pro Komponente
 - `components.multi_seed_stability.details.*_stats`: `n`, Mittelwert, Standardabweichung, SEM, 95%-CI
@@ -221,6 +232,7 @@ Zusätzlich enthält er:
 - `components.e2e_runtime.details.scenarios`: p50/p95/p99-Latenz, Drop-Rate, CPU/RAM-Drift je Szenario
 
 Interpretation kleiner Deltas:
+
 - Wenn ein Delta kleiner ist als die `ci95_half_width` in der relevanten Statistik, ist es wahrscheinlich Rauschen.
 - Für Merge-/Release-Entscheidungen sind `standard`/`strict` mit mehreren Seeds verpflichtend.
 
@@ -243,9 +255,11 @@ History bei Bedarf deaktivieren:
 ```
 
 Detailliertes Governance-Protokoll:
+
 - `benchmarks/REFERENCE_BENCHMARK_PROTOCOL.md`
 
 End-to-End-Performance-Hinweis:
+
 - Die Referenz-Suite misst jetzt explizit End-to-End-Runtime via `e2e_runtime`-Komponente.
 - Die E2E-Metrik basiert auf kontrollierten `--mock`-Szenarien und ist maschinenvergleichbar.
 - Für produktionsnahe Echtzeitprüfung weiterhin zusätzlich `main.py` mit echter Kamera/Mikrofon-Last prüfen.
@@ -265,11 +279,13 @@ Einzelne Master-Ausfuehrung:
 ```
 
 Master-Prompt-Datei fuer Agenten:
+
 - `agentic_face_finetune_pipeline.md`
 
 ### Real-World-Evaluation (lokale Sessions)
 
 Für reale Nutzungsbedingungen (Lichtwechsel, Occlusion, Kopfpose, Hintergrundgeräusch) gibt es jetzt ein JSONL-Schema und einen dedizierten Auswerter:
+
 - Schema: `benchmarks/real_world_eval_schema.json`
 - Auswerter: `benchmarks/real_world_eval.py`
 
@@ -280,14 +296,17 @@ Beispiel:
 ```
 
 Output:
+
 - `benchmarks/results/real_world_eval_latest.json`
 
 Der Report enthält:
+
 - `metrics`: Accuracy, Macro-F1, Weighted-Score, Index
 - `uncertainty`: Low-Confidence-Rate, Fehlerquote bei low/high confidence, ECE, Guardrail-Aktivierungsrate
 - `scenarios`: Aufschlüsselung pro Real-World-Szenario
 
 Zusatz in der `reference_suite.py`:
+
 - Die Suite ergänzt jetzt unter `extensions.real_world_uncertainty` automatisch Real-World- und Unsicherheitsmetriken,
   wenn JSONL-Dateien vorhanden sind (Default-Glob: `benchmarks/results/real_world/*.jsonl`).
 
@@ -304,6 +323,7 @@ Für P5.4 gibt es einen synthetischen SNR-Sweep, der Audioqualität und dynamisc
 ```
 
 Output:
+
 - `benchmarks/results/audio_noise_robustness.json`
 
 ---
@@ -312,20 +332,20 @@ Output:
 
 Das System verwendet standardmäßig das **Valence-Arousal-Modell** (kontinuierliche Farbinterpolation):
 
-| Dimension | Bereich | → Lichteffekt |
-|---|---|---|
+| Dimension                     | Bereich     | → Lichteffekt                                      |
+| ----------------------------- | ----------- | -------------------------------------------------- |
 | **Valence** (positiv/negativ) | −1.0 … +1.0 | Blau (neg.) ↔ Warmweiß (neutral) ↔ Warmgelb (pos.) |
-| **Arousal** (Aktivierung) | −1.0 … +1.0 | Dunkel/gedämpft (niedrig) ↔ Hell/gesättigt (hoch) |
+| **Arousal** (Aktivierung)     | −1.0 … +1.0 | Dunkel/gedämpft (niedrig) ↔ Hell/gesättigt (hoch)  |
 
-| Emotion | Valence | Arousal | Lichtcharakter |
-|---|---|---|---|
-| happy | +0.9 | +0.5 | Warm, hell, lebendig |
-| sad | −0.8 | −0.7 | Blau, dunkel, gedämpft |
-| angry | −0.9 | +1.0 | Rot, sehr hell, intensiv |
-| fear | −0.7 | +0.8 | Violett, hell, unruhig |
-| surprise | +0.3 | +0.9 | Orange, sehr hell |
-| disgust | −0.6 | +0.2 | Grünlich, mittelmäßig |
-| neutral | 0.0 | 0.0 | Warmweiß, ruhig |
+| Emotion  | Valence | Arousal | Lichtcharakter           |
+| -------- | ------- | ------- | ------------------------ |
+| happy    | +0.9    | +0.5    | Warm, hell, lebendig     |
+| sad      | −0.8    | −0.7    | Blau, dunkel, gedämpft   |
+| angry    | −0.9    | +1.0    | Rot, sehr hell, intensiv |
+| fear     | −0.7    | +0.8    | Violett, hell, unruhig   |
+| surprise | +0.3    | +0.9    | Orange, sehr hell        |
+| disgust  | −0.6    | +0.2    | Grünlich, mittelmäßig    |
+| neutral  | 0.0     | 0.0     | Warmweiß, ruhig          |
 
 Das direkte Emotion→Farbe-Mapping bleibt als Fallback erhalten (`USE_VALENCE_AROUSAL = False`).
 
@@ -335,61 +355,61 @@ Das direkte Emotion→Farbe-Mapping bleibt als Fallback erhalten (`USE_VALENCE_A
 
 ### Hardware & Capture
 
-| Konstante | Default | Beschreibung |
-|---|---|---|
-| `WEBCAM_INDEX` | `0` | Device-Index der USB-Webcam |
-| `HUE_BRIDGE_IP` | `"192.168.178.20"` | **Pflichtfeld ändern!** |
-| `HUE_LIGHT_IDS` | `[2,3,4,6]` | Liste der zu steuernden Lampen-IDs |
-| `FRAME_WIDTH/HEIGHT` | `640/480` | Auflösung des Kamera-Feeds |
-| `ANALYSIS_EVERY_N_FRAMES` | `5` | Jeden n-ten Frame analysieren |
-| `CAMERA_BUFFER_SIZE` | `1` | Kamera-Puffer (1 = immer neuester Frame) |
+| Konstante                 | Default            | Beschreibung                             |
+| ------------------------- | ------------------ | ---------------------------------------- |
+| `WEBCAM_INDEX`            | `0`                | Device-Index der USB-Webcam              |
+| `HUE_BRIDGE_IP`           | `"192.168.178.20"` | **Pflichtfeld ändern!**                  |
+| `HUE_LIGHT_IDS`           | `[2,3,4,6]`        | Liste der zu steuernden Lampen-IDs       |
+| `FRAME_WIDTH/HEIGHT`      | `640/480`          | Auflösung des Kamera-Feeds               |
+| `ANALYSIS_EVERY_N_FRAMES` | `5`                | Jeden n-ten Frame analysieren            |
+| `CAMERA_BUFFER_SIZE`      | `1`                | Kamera-Puffer (1 = immer neuester Frame) |
 
 ### DeepFace & Bildverarbeitung
 
-| Konstante | Default | Beschreibung |
-|---|---|---|
-| `DETECTOR_BACKEND` | `"retinaface"` | Face-Detektor (`retinaface`, `opencv`, `mtcnn`) |
-| `MIN_CONFIDENCE` | `0.45` | Minimale Erkennungskonfidenz (0–1) |
-| `ANALYSIS_FRAME_SIZE` | `224` | Frame-Breite vor Analyse (px) |
-| `CLAHE_CLIP_LIMIT` | `2.0` | Beleuchtungsnormalisierung (0 = aus) |
+| Konstante             | Default        | Beschreibung                                    |
+| --------------------- | -------------- | ----------------------------------------------- |
+| `DETECTOR_BACKEND`    | `"retinaface"` | Face-Detektor (`retinaface`, `opencv`, `mtcnn`) |
+| `MIN_CONFIDENCE`      | `0.45`         | Minimale Erkennungskonfidenz (0–1)              |
+| `ANALYSIS_FRAME_SIZE` | `224`          | Frame-Breite vor Analyse (px)                   |
+| `CLAHE_CLIP_LIMIT`    | `2.0`          | Beleuchtungsnormalisierung (0 = aus)            |
 
 ### EMA-Smoothing
 
-| Konstante | Default | Beschreibung |
-|---|---|---|
-| `EMA_ALPHA` | `0.15` | Basis-Gewicht neuer Messung (wird mit Konfidenz skaliert) |
-| `EMA_MIN_WEIGHT` | `0.05` | Emotionen unter diesem EMA-Wert werden ignoriert |
-| `FALLBACK_DECAY` | `0.08` | EMA-Drift Richtung neutral bei fehlendem Gesicht |
+| Konstante        | Default | Beschreibung                                              |
+| ---------------- | ------- | --------------------------------------------------------- |
+| `EMA_ALPHA`      | `0.15`  | Basis-Gewicht neuer Messung (wird mit Konfidenz skaliert) |
+| `EMA_MIN_WEIGHT` | `0.05`  | Emotionen unter diesem EMA-Wert werden ignoriert          |
+| `FALLBACK_DECAY` | `0.08`  | EMA-Drift Richtung neutral bei fehlendem Gesicht          |
 
 ### Erweiterte Analyse
 
-| Konstante | Default | Beschreibung |
-|---|---|---|
-| `TREND_INFLUENCE` | `0.3` | Einfluss des Emotionstrends auf Übergangszeit |
-| `BURST_CONFIDENCE_DELTA` | `0.25` | Konfidenzsprung der Burst-Modus auslöst |
-| `BURST_FRAMES` | `5` | Anzahl Frames im Burst-Modus |
-| `USE_VALENCE_AROUSAL` | `True` | Valence-Arousal-Modell statt direktem Mapping |
+| Konstante                | Default | Beschreibung                                  |
+| ------------------------ | ------- | --------------------------------------------- |
+| `TREND_INFLUENCE`        | `0.3`   | Einfluss des Emotionstrends auf Übergangszeit |
+| `BURST_CONFIDENCE_DELTA` | `0.25`  | Konfidenzsprung der Burst-Modus auslöst       |
+| `BURST_FRAMES`           | `5`     | Anzahl Frames im Burst-Modus                  |
+| `USE_VALENCE_AROUSAL`    | `True`  | Valence-Arousal-Modell statt direktem Mapping |
 
 ### Audio & Pose
 
-| Konstante | Default | Beschreibung |
-|---|---|---|
-| `USE_AUDIO` | `True` | Audio-Emotionserkennung aktivieren |
-| `AUDIO_DEVICE_INDEX` | `None` | Mikrofon-Index (None = Standard) |
-| `AUDIO_CHUNK_SECONDS` | `2.0` | Länge eines Audio-Analyse-Chunks |
-| `AUDIO_EMA_ALPHA` | `0.12` | EMA-Trägheit für Audio |
-| `AUDIO_WEIGHT` | `0.35` | Anteil Audio in der Fusion (35%) |
-| `USE_POSE` | `True` | Körpersprache-Analyse aktivieren |
-| `POSE_WEIGHT` | `0.2` | Einfluss des Pose-Arousal-Offsets |
+| Konstante             | Default | Beschreibung                       |
+| --------------------- | ------- | ---------------------------------- |
+| `USE_AUDIO`           | `True`  | Audio-Emotionserkennung aktivieren |
+| `AUDIO_DEVICE_INDEX`  | `None`  | Mikrofon-Index (None = Standard)   |
+| `AUDIO_CHUNK_SECONDS` | `2.0`   | Länge eines Audio-Analyse-Chunks   |
+| `AUDIO_EMA_ALPHA`     | `0.12`  | EMA-Trägheit für Audio             |
+| `AUDIO_WEIGHT`        | `0.35`  | Anteil Audio in der Fusion (35%)   |
+| `USE_POSE`            | `True`  | Körpersprache-Analyse aktivieren   |
+| `POSE_WEIGHT`         | `0.2`   | Einfluss des Pose-Arousal-Offsets  |
 
 ### Kalibrierung & Hue
 
-| Konstante | Default | Beschreibung |
-|---|---|---|
-| `CALIBRATION_FILE` | `"calibration_default.json"` | Pfad der Kalibrierungsdatei |
-| `CALIBRATION_SECONDS_PER_EMOTION` | `10` | Sekunden pro Emotion bei Kalibrierung |
-| `TRANSITION_TIME` | `20` | Farbübergang in 1/10 s → 2,0 s |
-| `FALLBACK_AFTER_SECONDS` | `8` | Sek. ohne Gesicht → Fallback-Licht |
+| Konstante                         | Default                      | Beschreibung                          |
+| --------------------------------- | ---------------------------- | ------------------------------------- |
+| `CALIBRATION_FILE`                | `"calibration_default.json"` | Pfad der Kalibrierungsdatei           |
+| `CALIBRATION_SECONDS_PER_EMOTION` | `10`                         | Sekunden pro Emotion bei Kalibrierung |
+| `TRANSITION_TIME`                 | `20`                         | Farbübergang in 1/10 s → 2,0 s        |
+| `FALLBACK_AFTER_SECONDS`          | `8`                          | Sek. ohne Gesicht → Fallback-Licht    |
 
 ---
 
@@ -406,6 +426,7 @@ setup.ps1          ← Windows-Einrichtungsskript
 ```
 
 Threads während des Betriebs:
+
 - **Main Thread** – OpenCV Capture + Fusion + Overlay + Hue-Steuerung
 - **Analysis Thread** – DeepFace Inference (CPU/GPU)
 - **Audio Thread** – SpeechBrain Mikrofon-Analyse (optional)
@@ -416,30 +437,38 @@ Threads während des Betriebs:
 ## Troubleshooting
 
 ### "Hue-Bridge-Verbindung fehlgeschlagen"
+
 → Bridge-Button einmal kurz drücken, dann Programm sofort neu starten (Pairing innerhalb 30 s).
 
 ### "Webcam 0 nicht verfügbar"
+
 → Webcam-Index anpassen: `WEBCAM_INDEX = 1` (oder 2, …) in `config.py`.
 
 ### Audio- oder Pose-Modul startet nicht
+
 → Die Module starten automatisch ohne Audio/Pose wenn die Abhängigkeiten fehlen. Fehler werden geloggt. Manuell testen:
+
 ```powershell
 .\venv\Scripts\python -c "import sounddevice; import speechbrain; print('Audio OK')"
 .\venv\Scripts\python -c "import mediapipe; print('Pose OK')"
 ```
 
 ### Langsame Emotionserkennung / CPU-Last hoch
+
 → `ANALYSIS_EVERY_N_FRAMES` erhöhen (z.B. `8`), `--no-audio --no-pose` verwenden, oder `DETECTOR_BACKEND = "opencv"` setzen.
 
 ### GPU-Beschleunigung (NVIDIA)
+
 ```powershell
 .\venv\Scripts\pip install "tensorflow[and-cuda]"
 ```
 
 ### Erste Ausführung dauert lang
+
 → Normal. DeepFace lädt beim ersten Start RetinaFace-Modell (~120 MB) und das Emotions-Modell. SpeechBrain lädt beim ersten Audio-Start das wav2vec2-Modell (~400 MB).
 
 ### EMA reagiert zu träge / zu nervös
+
 → `EMA_ALPHA` erhöhen (reaktiver) oder verringern (träger). Empfohlener Bereich: 0.05–0.30.
 
 ---

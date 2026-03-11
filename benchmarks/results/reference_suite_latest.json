@@ -1,6 +1,6 @@
 {
   "benchmark": "reference_suite_v2",
-  "generated_at_utc": "2026-03-11T08:29:06Z",
+  "generated_at_utc": "2026-03-11T08:56:36Z",
   "profile": "quick",
   "settings": {
     "seed": 17,
@@ -17,7 +17,7 @@
       "lightweight_env_metadata": true,
       "sanity_include_face_mesh": false
     },
-    "preflight": false,
+    "preflight": true,
     "weights": {
       "extreme_visual_robustness": 0.4,
       "multi_seed_stability": 0.23,
@@ -28,11 +28,12 @@
     "active_components": [
       "extreme_visual_robustness",
       "multi_seed_stability",
-      "test_quality",
-      "module_sanity",
-      "e2e_runtime"
+      "module_sanity"
     ],
-    "skipped_components": [],
+    "skipped_components": [
+      "e2e_runtime",
+      "test_quality"
+    ],
     "face_mesh_weight": 0.15,
     "head_pose_strength": 0.35
   },
@@ -436,8 +437,8 @@
               }
             },
             "runtime": {
-              "total_seconds": 1.8903647000006458,
-              "hard_samples_per_second": 3.7029891639415444
+              "total_seconds": 1.8431237999993755,
+              "hard_samples_per_second": 3.797900065097294
             }
           }
         }
@@ -482,15 +483,11 @@
       }
     },
     "test_quality": {
-      "score01": 1.0,
+      "score01": 0.0,
       "details": {
-        "score_index": 1000,
-        "command": "C:\\Users\\mickg\\smart-light\\.venv\\Scripts\\python.exe -m pytest -q tests/test_ema_utils.py tests/test_config_local_override.py tests/test_emotion_regulator.py tests/test_face_mesh_and_color.py tests/test_hrv_analyzer.py tests/test_light_mapping.py tests/test_main_overlay.py tests/test_main_loop_safeguards.py tests/test_reference_suite_gate.py tests/test_runtime_error_telemetry.py tests/test_audio_quality.py tests/test_reference_suite_real_world_extension.py tests/test_session_log_privacy.py tests/test_smart_features.py",
-        "exit_code": 0,
-        "passed": 62,
-        "total": 62,
-        "all_passed": true,
-        "output_tail": "..............................................................           [100%]\n62 passed in 4.59s"
+        "score_index": 0,
+        "skipped": true,
+        "reason": "Skipped by preflight mode"
       }
     },
     "module_sanity": {
@@ -520,126 +517,27 @@
       }
     },
     "e2e_runtime": {
-      "score01": 0.9239222841685384,
+      "score01": 0.0,
       "details": {
-        "score_index": 924,
-        "e2e_profile": "quick",
-        "aggregate": {
-          "score01": 0.9239222841685384,
-          "index": 924
-        },
-        "settings": {
-          "duration_seconds": 12.0,
-          "warmup_seconds": 4.0,
-          "sample_interval_seconds": 0.5,
-          "scenarios": [
-            "video_minimal",
-            "video_face_mesh"
-          ],
-          "python_executable": "C:\\Users\\mickg\\smart-light\\.venv\\Scripts\\python.exe"
-        },
-        "scenarios": [
-          {
-            "scenario": "video_minimal",
-            "command": "C:\\Users\\mickg\\smart-light\\.venv\\Scripts\\python.exe C:\\Users\\mickg\\smart-light\\main.py --mock --session-log C:\\Users\\mickg\\AppData\\Local\\Temp\\e2e_video_minimal_sc5eeq3k.jsonl --condition control --no-audio --no-pose --no-face-mesh --no-hrv --no-breathing",
-            "duration_seconds": 12.00907564163208,
-            "requested_duration_seconds": 12.0,
-            "return_code": 1,
-            "stable_exit": true,
-            "timing": {
-              "observed_ticks": 9.0,
-              "expected_ticks": 12.0,
-              "drop_rate": 0.25,
-              "loop_hz": 0.9616478707729731,
-              "latency_p50_ms": 1039.1271114349365,
-              "latency_p95_ms": 1044.4145441055298,
-              "latency_p99_ms": 1045.1631593704224,
-              "interval_mean_ms": 1039.8816764354706
-            },
-            "process": {
-              "cpu_mean_percent": 0.0,
-              "cpu_p95_percent": 0.0,
-              "rss_mean_mb": 4.421875,
-              "rss_peak_mb": 4.421875,
-              "rss_drift_mb_per_min": 0.0
-            },
-            "samples": {
-              "cpu_n": 16,
-              "rss_n": 16,
-              "session_log_rows": 9
-            },
-            "score": {
-              "score01": 0.9321353003599876,
-              "score_index": 932,
-              "subscores": {
-                "loop_hz": 0.9616478707729731,
-                "drop_rate": 0.75,
-                "latency_p95": 0.9777927279472352,
-                "cpu_headroom": 1.0,
-                "memory_drift": 1.0,
-                "stability": 1.0
-              }
-            }
-          },
-          {
-            "scenario": "video_face_mesh",
-            "command": "C:\\Users\\mickg\\smart-light\\.venv\\Scripts\\python.exe C:\\Users\\mickg\\smart-light\\main.py --mock --session-log C:\\Users\\mickg\\AppData\\Local\\Temp\\e2e_video_face_mesh_bbt04u8d.jsonl --condition control --no-audio --no-pose --no-hrv --no-breathing",
-            "duration_seconds": 12.009840726852417,
-            "requested_duration_seconds": 12.0,
-            "return_code": 1,
-            "stable_exit": true,
-            "timing": {
-              "observed_ticks": 8.0,
-              "expected_ticks": 12.0,
-              "drop_rate": 0.33333333333333337,
-              "loop_hz": 0.9617981721197153,
-              "latency_p50_ms": 1039.1685962677002,
-              "latency_p95_ms": 1042.5342559814453,
-              "latency_p99_ms": 1042.6686096191406,
-              "interval_mean_ms": 1039.7191728864398
-            },
-            "process": {
-              "cpu_mean_percent": 0.0,
-              "cpu_p95_percent": 0.0,
-              "rss_mean_mb": 4.421875,
-              "rss_peak_mb": 4.421875,
-              "rss_drift_mb_per_min": 0.0
-            },
-            "samples": {
-              "cpu_n": 16,
-              "rss_n": 16,
-              "session_log_rows": 8
-            },
-            "score": {
-              "score01": 0.9157092679770892,
-              "score_index": 916,
-              "subscores": {
-                "loop_hz": 0.9617981721197153,
-                "drop_rate": 0.6666666666666666,
-                "latency_p95": 0.9787328720092774,
-                "cpu_headroom": 1.0,
-                "memory_drift": 1.0,
-                "stability": 1.0
-              }
-            }
-          }
-        ]
+        "score_index": 0,
+        "skipped": true,
+        "reason": "Skipped by preflight mode"
       }
     }
   },
   "composite": {
-    "score01": 0.5743922284168539,
-    "index": 574
+    "score01": 0.4273972602739726,
+    "index": 427
   },
   "runtime": {
-    "total_seconds": 31.75719990000107,
+    "total_seconds": 2.5209725000004255,
     "component_seconds": {
-      "extreme_visual_robustness": 1.8910792999995465,
-      "multi_seed_stability": 0.7004503000007389,
-      "test_quality": 5.128678699999,
-      "module_sanity": 0.0026503000008233357,
-      "e2e_runtime": 24.03411480000068,
-      "real_world_uncertainty": 0.00018120000095223077
+      "extreme_visual_robustness": 1.8437466000013956,
+      "multi_seed_stability": 0.6746738000001642,
+      "test_quality": 0.0,
+      "module_sanity": 0.0023601999982929556,
+      "e2e_runtime": 0.0,
+      "real_world_uncertainty": 0.00015139999959501438
     }
   },
   "extensions": {
@@ -653,58 +551,46 @@
     "baseline_present": true,
     "pass": false,
     "reasons": [
-      "Component regression extreme_visual_robustness: current=0.2343, baseline=0.2840, allowed_drop=0.0400"
+      "Component regression extreme_visual_robustness: current=0.2343, baseline=0.2840, allowed_drop=0.0400",
+      "Gate partial-check mode: skipped components=e2e_runtime, test_quality. Composite drop check disabled."
     ],
     "failures": [
       "Component regression extreme_visual_robustness: current=0.2343, baseline=0.2840, allowed_drop=0.0400"
     ],
-    "warnings": [],
+    "warnings": [
+      "Gate partial-check mode: skipped components=e2e_runtime, test_quality. Composite drop check disabled."
+    ],
     "baseline_index": 541,
-    "current_index": 574,
+    "current_index": 427,
     "benchmark_compatible": true,
     "baseline_benchmark": "reference_suite_v2",
     "current_benchmark": "reference_suite_v2"
   },
   "relative_to_baseline": {
     "baseline_present": true,
-    "composite_index_percent_of_baseline": 106.09981515711647,
+    "composite_index_percent_of_baseline": 78.9279112754159,
     "components_index_percent_of_baseline": {
       "extreme_visual_robustness": 82.3943661971831,
       "multi_seed_stability": 191.07806691449812,
-      "test_quality": 100.0,
+      "test_quality": 0.0,
       "module_sanity": 100.0,
-      "e2e_runtime": 97.05882352941177
+      "e2e_runtime": 0.0
     },
     "components_score01_percent_of_baseline": {
       "extreme_visual_robustness": 82.49178729531583,
       "multi_seed_stability": 191.34946729259067,
-      "test_quality": 100.0,
+      "test_quality": 0.0,
       "module_sanity": 100.0,
-      "e2e_runtime": 97.00275468212072
+      "e2e_runtime": 0.0
     }
   },
   "improvement_targets": [
-    "Prioritaet: visuelle Robustheit steigern (aktuell 0.234).",
-    "Prioritaet: seed-uebergreifende Stabilitaet verbessern (aktuell 0.514)."
+    "Prioritaet: fehlschlagende Tests beheben (aktuell 0.000)."
   ],
   "trend": {
     "has_previous": true,
     "basis": "same-profile+detector",
     "previous": {
-      "generated_at_utc": "2026-03-11T08:19:51Z",
-      "profile": "quick",
-      "detector": "opencv",
-      "composite_index": 522,
-      "component_indices": {
-        "extreme_visual_robustness": 234,
-        "multi_seed_stability": 514,
-        "test_quality": 1000,
-        "module_sanity": 1000,
-        "e2e_runtime": 400
-      },
-      "gate_pass": false
-    },
-    "current": {
       "generated_at_utc": "2026-03-11T08:29:06Z",
       "profile": "quick",
       "detector": "opencv",
@@ -718,16 +604,30 @@
       },
       "gate_pass": false
     },
+    "current": {
+      "generated_at_utc": "2026-03-11T08:56:36Z",
+      "profile": "quick",
+      "detector": "opencv",
+      "composite_index": 427,
+      "component_indices": {
+        "extreme_visual_robustness": 234,
+        "multi_seed_stability": 514,
+        "test_quality": 0,
+        "module_sanity": 1000,
+        "e2e_runtime": 0
+      },
+      "gate_pass": false
+    },
     "delta": {
-      "composite_index": 52,
+      "composite_index": -147,
       "component_indices": {
         "extreme_visual_robustness": 0,
         "multi_seed_stability": 0,
-        "test_quality": 0,
+        "test_quality": -1000,
         "module_sanity": 0,
-        "e2e_runtime": 524
+        "e2e_runtime": -924
       }
     },
-    "summary": "Composite improved by +52 points vs previous comparable run."
+    "summary": "Composite regressed by -147 points vs previous comparable run."
   }
 }

@@ -10,11 +10,10 @@ import logging
 import time
 import cv2
 from deepface import DeepFace
+from config import EMOTIONS
 import config
 
 log = logging.getLogger("emotion-light.calibration")
-
-EMOTIONS = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
 LABEL_DE = {
     "angry": "WUETEND",
     "disgust": "EKEL",
