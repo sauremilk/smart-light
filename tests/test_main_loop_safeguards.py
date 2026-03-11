@@ -20,8 +20,10 @@ def import_main_with_bridge_stub(bridge_cls):
     sys.modules["deepface"] = deepface_module
     sys.modules["phue"] = phue_module
 
-    if "main" in sys.modules:
-        del sys.modules["main"]
+    # Clear main and extracted sub-modules so they pick up the stubs.
+    for mod_name in list(sys.modules):
+        if mod_name == "main" or mod_name.startswith(("core.", "analyzers.")):
+            del sys.modules[mod_name]
 
     return importlib.import_module("main")
 

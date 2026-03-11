@@ -46,11 +46,33 @@ Weitere Details: `docs/ALEXA_INTEGRATION.md`
 .\setup.ps1
 ```
 
+Das Setup aktiviert auch lokale Git-Hooks (`core.hooksPath=.githooks`).
+Dadurch werden wichtige staged Änderungen automatisch in
+`docs/IMPORTANT_CHANGES.md` dokumentiert, sobald ein Commit erstellt wird.
+Ein zusaetzlicher `pre-push`-Hook blockiert Pushes, falls wichtige Aenderungen
+ohne entsprechendes Update in `docs/IMPORTANT_CHANGES.md` enthalten sind.
+Die Liste der als wichtig geltenden Pfade liegt zentral in
+`tools/auto_doc_important_paths.txt`.
+
+Wenn du hauptsaechlich mit Coding-Agenten arbeitest und auch ohne Commit
+Zwischenstaende dokumentieren willst:
+
+```powershell
+.\venv\Scripts\python tools\auto_document_changes.py --working-tree --actor copilot-agent
+```
+
+Optional dauerhaft fuer Agent-Sessions konfigurieren:
+
+```powershell
+git config autodoc.actor copilot-agent
+```
+
 Oder manuell:
 
 ```powershell
 python -m venv venv
 .\venv\Scripts\pip install -r requirements.txt
+git config core.hooksPath .githooks
 ```
 
 > **Hinweis:** Torch (~114 MB), SpeechBrain und MediaPipe werden beim ersten `pip install` heruntergeladen. Das kann einige Minuten dauern.

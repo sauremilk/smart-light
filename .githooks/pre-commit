@@ -1,0 +1,26 @@
+#!/usr/bin/env sh
+set -eu
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+SCRIPT_PATH="$ROOT_DIR/tools/auto_document_changes.py"
+
+if [ ! -f "$SCRIPT_PATH" ]; then
+  exit 0
+fi
+
+if [ -x "$ROOT_DIR/.venv/Scripts/python.exe" ]; then
+  PYTHON_CMD="$ROOT_DIR/.venv/Scripts/python.exe"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_CMD="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_CMD="python"
+else
+  echo "[auto-doc] No Python interpreter found."
+  exit 1
+fi
+
+"$PYTHON_CMD" "$SCRIPT_PATH" --staged
+
+if [ -f "$ROOT_DIR/docs/IMPORTANT_CHANGES.md" ]; then
+  git -C "$ROOT_DIR" add docs/IMPORTANT_CHANGES.md
+fi

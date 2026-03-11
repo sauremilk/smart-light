@@ -66,9 +66,6 @@ def _configure_third_party_runtime_logs():
 
 _configure_third_party_runtime_logs()
 
-from deepface import DeepFace
-from phue import Bridge
-
 from analyzers.audio_quality import effective_audio_weight
 from analyzers.breathing_analyzer import BR_REST_BPM
 from config import (
@@ -128,7 +125,6 @@ from config import (
     CALIBRATION_FILE,
     CAMERA_BUFFER_SIZE,
     CIRCADIAN_UPDATE_INTERVAL,
-    CLAHE_CLIP_LIMIT,
     COGNITIVE_STABILITY_WINDOW,
     DEFAULT_MODE,
     DETECTOR_BACKEND,
@@ -136,7 +132,6 @@ from config import (
     EMA_MIN_WEIGHT,
     EMOTION_MAP,
     EMOTIONS,
-    FACE_FINETUNE_ONNX_PATH,
     FACE_MESH_FRAME_SIZE,
     FACE_MESH_WEIGHT,
     FALLBACK_AFTER_SECONDS,
@@ -155,13 +150,10 @@ from config import (
     HRV_OFFSET_CLAMP,
     HRV_OFFSET_EMA_ALPHA,
     HRV_WINDOW_SECONDS,
-    HUE_BRI_QUANT,
     HUE_BRIDGE_IP,
-    HUE_HUE_QUANT,
     HUE_LIGHT_IDS,
     HUE_LIGHT_ROLES,
     HUE_MIN_UPDATE_INTERVAL,
-    HUE_SAT_QUANT,
     LOW_CONFIDENCE_ALPHA_SCALE,
     LOW_FPS_RECOVERY_HYSTERESIS,
     LOW_QUALITY_MIN_TRANSITION,
@@ -203,9 +195,7 @@ from config import (
     USE_BREATHING_PACER,
     USE_CIRCADIAN,
     USE_COGNITIVE_CLASSIFIER,
-    USE_COLOR_CONSTANCY,
     USE_EXTENDED_POSE,
-    USE_FACE_FINETUNE_ONNX,
     USE_FACE_MESH,
     USE_FEEDBACK,
     USE_HEAD_POSE_CONFIDENCE,
@@ -228,23 +218,18 @@ from config import (
 from core.break_manager import BreakManager
 from core.circadian import CircadianSchedule
 from core.cognitive_state import CognitiveClassifier
-from core.ema_utils import normalize_vector_inplace, update_ema_vector_inplace
 from core.emotion_regulator import EmotionRegulator
 from core.error_taxonomy import (
     ACTIVITY_ANALYZER_INIT_FAILED,
     AUDIO_ANALYZER_INIT_FAILED,
     BREATHING_ANALYZER_INIT_FAILED,
     CALIBRATION_LOAD_FAILED,
-    DEEPFACE_ANALYZE_FAILED,
     DEEPFACE_WARMUP_FAILED,
     FACEMESH_ANALYZER_INIT_FAILED,
     HRV_ANALYZER_INIT_FAILED,
     HUE_CONNECT_FAILED,
-    HUE_OFF_FAILED,
     HUE_REENABLE_FAILED,
-    HUE_SEND_FAILED,
     POSE_ANALYZER_INIT_FAILED,
-    category_for_error_code,
 )
 from core.feedback import FeedbackCollector
 from core.light_mapping import (
@@ -296,327 +281,15 @@ for _handler in logging.getLogger().handlers:
 log = logging.getLogger("emotion-light")
 
 
-try:
-    import onnxruntime as ort
-except Exception:
-    ort = None
-
-
-class OnnxEmotionModel:
-    """ONNX-backed emotion classifier with DeepFace-compatible output shape."""
-
-    _labels = EMOTIONS
-
-    def __init__(self, model_path: str):
-        if ort is None:
-            raise RuntimeError("onnxruntime is not available")
-        self._session = ort.InferenceSession(
-            model_path, providers=["CPUExecutionProvider"]
-        )
-        self._input_name = self._session.get_inputs()[0].name
-
-    def analyze(self, frame: np.ndarray) -> dict:
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        resized = cv2.resize(rgb, (224, 224), interpolation=cv2.INTER_AREA)
-        x = resized.astype(np.float32) / 255.0
-        x = np.transpose(x, (2, 0, 1))[None, ...]
-        logits = self._session.run(None, {self._input_name: x})[0]
-        probs = _softmax(logits[0])
-
-        scores = {
-            label: float(probs[i] * 100.0) for i, label in enumerate(self._labels)
-        }
-        dominant = max(scores, key=scores.get)
-        return {"emotion": scores, "dominant_emotion": dominant}
-
-
-def _softmax(logits: np.ndarray) -> np.ndarray:
-    x = np.asarray(logits, dtype=np.float64)
-    x = x - np.max(x)
-    exp = np.exp(x)
-    denom = float(np.sum(exp))
-    if denom <= 1e-12:
-        return np.full_like(exp, fill_value=1.0 / max(1, exp.size), dtype=np.float64)
-    return exp / denom
-
-
-def _init_optional_onnx_model() -> OnnxEmotionModel | None:
-    if not USE_FACE_FINETUNE_ONNX:
-        return None
-    if not os.path.exists(FACE_FINETUNE_ONNX_PATH):
-        log.warning(
-            "USE_FACE_FINETUNE_ONNX=True but model file is missing: %s. Falling back to DeepFace.",
-            FACE_FINETUNE_ONNX_PATH,
-        )
-        return None
-    try:
-        model = OnnxEmotionModel(FACE_FINETUNE_ONNX_PATH)
-        log.info("ONNX emotion backend active: %s", FACE_FINETUNE_ONNX_PATH)
-        return model
-    except Exception as exc:
-        log.warning(
-            "Failed to initialize ONNX backend (%s). Falling back to DeepFace.", exc
-        )
-        return None
-
-
-_ONNX_MODEL = _init_optional_onnx_model()
-
-
-def analyze_emotion_frame(frame: np.ndarray) -> dict | None:
-    """Returns DeepFace-like result dict with keys: emotion, dominant_emotion."""
-    if _ONNX_MODEL is not None:
-        return _ONNX_MODEL.analyze(frame)
-
-    results = DeepFace.analyze(
-        img_path=frame,
-        actions=["emotion"],
-        detector_backend=DETECTOR_BACKEND,
-        enforce_detection=False,
-        silent=True,
-    )
-    if isinstance(results, list):
-        if not results:
-            return None
-        face = results[0]
-        return face if isinstance(face, dict) else None
-    return results if isinstance(results, dict) else None
-
-
-class RuntimeErrorTelemetry:
-    """Sammelt Runtime-Fehler strukturiert und drosselt Log-Spam."""
-
-    def __init__(self, max_events: int = 256):
-        self._lock = threading.Lock()
-        self._counts = defaultdict(int)
-        self._last_emit = {}
-        self._events = deque(maxlen=max_events)
-
-    def record(
-        self,
-        component: str,
-        code: str,
-        detail: str,
-        exc: Exception | None = None,
-        level: int = logging.WARNING,
-        cooldown_s: float = 5.0,
-    ) -> None:
-        now = time.time()
-        category = category_for_error_code(code)
-        key = f"{component}:{code}"
-
-        with self._lock:
-            self._counts[key] += 1
-            count = self._counts[key]
-            self._events.append(
-                {
-                    "ts": now,
-                    "component": component,
-                    "category": category,
-                    "code": code,
-                    "detail": detail,
-                    "count": count,
-                    "exception": repr(exc) if exc is not None else None,
-                }
-            )
-            last = float(self._last_emit.get(key, 0.0))
-            should_emit = (now - last) >= cooldown_s
-            if should_emit:
-                self._last_emit[key] = now
-
-        if should_emit:
-            suffix = f"; exc={exc}" if exc is not None else ""
-            log.log(
-                level,
-                "[ERR:%s] component=%s count=%d detail=%s%s",
-                code,
-                f"{component}/{category}",
-                count,
-                detail,
-                suffix,
-            )
-
-    def summary(self) -> dict:
-        with self._lock:
-            return dict(self._counts)
-
-
-ERR_TELEMETRY = RuntimeErrorTelemetry()
-
-
-# ──────────────────── Hue Controller ───────────────────────────
-
-
-class HueController:
-    """Steuert mehrere Philips Hue Lampen mit rollenbasierter Szenen-Komposition."""
-
-    def __init__(self, ip: str, light_ids: list, light_roles: dict | None = None):
-        self.bridge = Bridge(ip)
-        self.bridge.connect()
-        self.lids = light_ids
-        self._roles = light_roles or {lid: "primary" for lid in light_ids}
-        self._last_cmd: dict = {}
-        self._last_sent_ts = 0.0
-        self._send_q: queue.Queue = queue.Queue(maxsize=1)
-        self._sender_running = True
-        self._sender_thread = threading.Thread(target=self._sender_loop, daemon=True)
-        self._sender_thread.start()
-        for lid in self.lids:
-            self.bridge.set_light(lid, "on", True)
-        log.info(
-            "Hue Bridge verbunden, %d Lampen aktiviert: %s", len(self.lids), self.lids
-        )
-
-    def _sender_loop(self):
-        """Sendet Hue-Befehle asynchron, damit der Main-Loop nicht auf I/O wartet."""
-        while self._sender_running:
-            try:
-                item = self._send_q.get(timeout=0.5)
-            except queue.Empty:
-                continue
-
-            if item is None:
-                break
-
-            all_cmds, transition = item
-            for lid in self.lids:
-                try:
-                    cmd = all_cmds[lid].copy()
-                    cmd["transitiontime"] = transition
-                    self.bridge.set_light(lid, cmd)
-                except Exception as e:
-                    ERR_TELEMETRY.record(
-                        component="hue",
-                        code=HUE_SEND_FAILED,
-                        detail=f"set_light failed for lid={lid}",
-                        exc=e,
-                        level=logging.ERROR,
-                        cooldown_s=2.0,
-                    )
-
-    def _enqueue_latest(self, all_cmds: dict, transition: int) -> None:
-        """Haelt nur den neuesten ausstehenden Hue-Befehl in der Queue."""
-        try:
-            while not self._send_q.empty():
-                self._send_q.get_nowait()
-            self._send_q.put_nowait((all_cmds, transition))
-        except queue.Full:
-            pass
-
-    @staticmethod
-    def _quantize(value: int, step: int, min_value: int, max_value: int) -> int:
-        if step <= 1:
-            return max(min_value, min(max_value, int(value)))
-        q = int(round(float(value) / step) * step)
-        return max(min_value, min(max_value, q))
-
-    def apply(self, params: dict, transition: int = TRANSITION_TIME):
-        """Setzt Hue/Bri/Sat auf allen Lampen mit rollenbasierter Anpassung."""
-        now = time.time()
-        if now - self._last_sent_ts < HUE_MIN_UPDATE_INTERVAL:
-            return
-
-        primary_cmd = {
-            "hue": self._quantize(params["hue"], HUE_HUE_QUANT, 0, 65535),
-            "bri": self._quantize(params["bri"], HUE_BRI_QUANT, 1, 254),
-            "sat": self._quantize(params["sat"], HUE_SAT_QUANT, 0, 254),
-        }
-
-        # Erzeuge ein Cache-Key aus allen Lampen-Parametern
-        all_cmds = {}
-        for lid in self.lids:
-            role = self._roles.get(lid, "primary")
-            role_params = compose_multi_light_scene(primary_cmd, role)
-            all_cmds[lid] = {
-                "hue": self._quantize(role_params["hue"], HUE_HUE_QUANT, 0, 65535),
-                "bri": self._quantize(role_params["bri"], HUE_BRI_QUANT, 1, 254),
-                "sat": self._quantize(role_params["sat"], HUE_SAT_QUANT, 0, 254),
-            }
-
-        if all_cmds == self._last_cmd:
-            return
-        self._last_cmd = all_cmds
-        self._last_sent_ts = now
-        self._enqueue_latest(all_cmds, transition)
-
-    def off(self):
-        """Schaltet alle Lampen aus."""
-        for lid in self.lids:
-            try:
-                self.bridge.set_light(lid, "on", False)
-            except Exception as e:
-                ERR_TELEMETRY.record(
-                    component="hue",
-                    code=HUE_OFF_FAILED,
-                    detail=f"off failed for lid={lid}",
-                    exc=e,
-                    level=logging.ERROR,
-                    cooldown_s=2.0,
-                )
-
-    def shutdown(self):
-        """Beendet den Sender-Thread kontrolliert."""
-        self._sender_running = False
-        try:
-            self._send_q.put_nowait(None)
-        except queue.Full:
-            try:
-                self._send_q.get_nowait()
-                self._send_q.put_nowait(None)
-            except Exception:
-                pass
-        try:
-            self._sender_thread.join(timeout=1.5)
-        except Exception:
-            pass
-
-
-# ───────────── Beleuchtungsnormalisierung ──────────────────────
-
-_clahe = (
-    cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=(8, 8))
-    if CLAHE_CLIP_LIMIT > 0
-    else None
+# ─── Extracted modules ────────────────────────────────────────
+from analyzers.emotion_analyzer import (  # noqa: E402
+    EmotionAnalyzer,
+    _ONNX_MODEL,
+    analyze_emotion_frame,
 )
-
-
-def gray_world_correction(frame):
-    """Gray-World Color-Constancy: korrigiert Farbstich durch die Hue-Lampen.
-
-    Normalisiert jeden Kanal so, dass der Durchschnitt bei 128 liegt.
-    Bricht den Feedback-Loop: bunte Lampen → verfaerbtes Kamerabild → falsche Emotion.
-    """
-    fb = frame.astype(np.float32)
-    for c in range(3):
-        avg = fb[:, :, c].mean()
-        if avg > 1.0:
-            fb[:, :, c] *= 128.0 / avg
-    return np.clip(fb, 0, 255).astype(np.uint8)
-
-
-def normalize_lighting(frame):
-    """Color-Constancy + CLAHE im LAB-Farbraum fuer stabile Erkennung."""
-    result = frame
-    if USE_COLOR_CONSTANCY:
-        result = gray_world_correction(result)
-    if _clahe is None:
-        return result
-    lab = cv2.cvtColor(result, cv2.COLOR_BGR2LAB)
-    lab[:, :, 0] = _clahe.apply(lab[:, :, 0])
-    return cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-
-
-def _resize_for_width(frame, target_width: int):
-    """Skaliert ein Frame nur dann herunter, wenn es breiter als target_width ist."""
-    if target_width <= 0:
-        return frame
-    h, w = frame.shape[:2]
-    if w <= target_width:
-        return frame
-    scale = target_width / float(w)
-    return cv2.resize(
-        frame, (target_width, max(1, int(h * scale))), interpolation=cv2.INTER_AREA
-    )
+from core.hue_controller import HueController, MockBridgeController  # noqa: E402
+from core.preprocessing import gray_world_correction, resize_for_width  # noqa: E402
+from core.telemetry import ERR_TELEMETRY  # noqa: E402
 
 
 # ───────────── Kalibrierung laden ──────────────────────────────
@@ -641,270 +314,6 @@ def load_calibration(path: str) -> dict:
             cooldown_s=15.0,
         )
         return {}
-
-
-# ──────────────── Emotion Analyzer (Thread) ────────────────────
-
-
-class EmotionAnalyzer:
-    """Asynchrone Emotionserkennung mit EMA-Smoothing, Confidence-Gewichtung,
-    CLAHE-Normalisierung, Trend-Analyse und Mikro-Expressions-Burst."""
-
-    _EMOTIONS = list(EMOTION_MAP.keys())  # 7 Emotionen
-
-    def __init__(self, calibration: dict | None = None):
-        self._q: queue.Queue = queue.Queue(maxsize=1)
-        self._lock = threading.Lock()
-        self._running = False
-        self._last_face_time = time.time()
-        self._calibration = calibration or {}
-        # EMA-Vektor: gleichverteilt starten
-        n = len(self._EMOTIONS)
-        self._ema = {e: 1.0 / n for e in self._EMOTIONS}
-        self._ema_prev = self._ema.copy()  # Vorheriger EMA fuer Trend
-        self._avg_confidence = 0.5  # Laufender Durchschnitt der Confidence (fuer Burst)
-        self._burst_remaining = 0  # Verbleibende Burst-Frames
-        self._result = {
-            "emotion": "neutral",
-            "confidence": 0.0,
-            "quality": 0.0,
-            "ema_vector": self._ema.copy(),
-            "valence": 0.0,
-            "arousal": 0.0,
-            "trend_valence": 0.0,
-        }
-
-    def start(self):
-        self._running = True
-        threading.Thread(target=self._loop, daemon=True).start()
-
-    def submit(self, frame):
-        """Uebergibt einen Frame (non-blocking, verwirft alten Frame)."""
-        try:
-            while not self._q.empty():
-                self._q.get_nowait()
-            self._q.put_nowait(frame)
-        except queue.Full:
-            pass
-
-    @property
-    def burst_active(self) -> bool:
-        return self._burst_remaining > 0
-
-    @property
-    def last_face_time(self) -> float:
-        """Zeitstempel des letzten erkannten Gesichts."""
-        return self._last_face_time
-
-    def _apply_calibration(self, scores: dict) -> dict:
-        """Wendet Kalibrierungs-Offsets auf rohe Scores an."""
-        if not self._calibration:
-            return scores
-        calibrated = {}
-        for e in self._EMOTIONS:
-            raw = scores.get(e, 0.0)
-            offset = self._calibration.get(e, 0.0)
-            calibrated[e] = max(0.0, min(100.0, raw + offset))
-        return calibrated
-
-    def _update_ema(self, scores: dict, confidence: float):
-        """EMA-Update mit Confidence-Gewichtung: niedrige Konfidenz = weniger Einfluss."""
-        self._ema_prev = self._ema.copy()
-        alpha = EMA_ALPHA * confidence  # Confidence-gewichtetes Alpha
-        update_ema_vector_inplace(self._ema, scores, alpha, self._EMOTIONS)
-
-    def _compute_valence_arousal(self) -> tuple:
-        """Berechnet gewichteten Valence/Arousal aus EMA-Vektor."""
-        filtered = {e: w for e, w in self._ema.items() if w >= EMA_MIN_WEIGHT}
-        if not filtered:
-            return 0.0, 0.0
-        total = sum(filtered.values())
-        valence = sum(
-            (w / total) * VALENCE_AROUSAL_MAP[e]["valence"] for e, w in filtered.items()
-        )
-        arousal = sum(
-            (w / total) * VALENCE_AROUSAL_MAP[e]["arousal"] for e, w in filtered.items()
-        )
-        return valence, arousal
-
-    def _compute_trend(self) -> float:
-        """Berechnet Valence-Trend (Differenz zum vorherigen EMA)."""
-        v_now = sum(
-            self._ema.get(e, 0) * VALENCE_AROUSAL_MAP[e]["valence"]
-            for e in self._EMOTIONS
-        )
-        v_prev = sum(
-            self._ema_prev.get(e, 0) * VALENCE_AROUSAL_MAP[e]["valence"]
-            for e in self._EMOTIONS
-        )
-        return v_now - v_prev
-
-    def _dominant_emotion(self) -> tuple:
-        """Gibt (Emotionsname, EMA-Gewicht) der staerksten Emotion zurueck."""
-        best = max(self._EMOTIONS, key=lambda e: self._ema[e])
-        return best, self._ema[best]
-
-    def _check_burst(self, confidence: float):
-        """Prueft ob ein Mikro-Expressions-Burst ausgeloest werden soll."""
-        delta = abs(confidence - self._avg_confidence)
-        # Laufenden Durchschnitt aktualisieren
-        self._avg_confidence = 0.95 * self._avg_confidence + 0.05 * confidence
-        if delta >= BURST_CONFIDENCE_DELTA and self._burst_remaining <= 0:
-            self._burst_remaining = BURST_FRAMES
-            log.debug("Burst ausgeloest: delta=%.2f", delta)
-
-    def _compute_prediction_quality(self, scores: dict) -> float:
-        """Berechnet ein robustes Qualitaetsmass aus Margin und Entropie."""
-        raw = np.array(
-            [max(0.0, float(scores.get(e, 0.0))) for e in self._EMOTIONS],
-            dtype=np.float64,
-        )
-        total = float(raw.sum())
-        if total <= 1e-12:
-            return 0.0
-
-        probs = raw / total
-        sorted_probs = np.sort(probs)
-        top1 = float(sorted_probs[-1])
-        top2 = float(sorted_probs[-2]) if len(sorted_probs) > 1 else 0.0
-        margin = max(0.0, top1 - top2)
-
-        entropy = float(-np.sum(probs * np.log(np.clip(probs, 1e-12, 1.0))))
-        max_entropy = float(np.log(max(2, len(self._EMOTIONS))))
-        entropy_norm = entropy / max_entropy if max_entropy > 1e-12 else 1.0
-        entropy_conf = 1.0 - max(0.0, min(1.0, entropy_norm))
-
-        q = (
-            float(UNCERTAINTY_MARGIN_WEIGHT) * margin
-            + float(UNCERTAINTY_ENTROPY_WEIGHT) * entropy_conf
-        )
-        return max(0.0, min(1.0, float(q)))
-
-    def _loop(self):
-        while self._running:
-            timeout = 0.05 if self._burst_remaining > 0 else 1.0
-            try:
-                frame = self._q.get(timeout=timeout)
-            except queue.Empty:
-                self._maybe_fallback()
-                continue
-
-            if self._burst_remaining > 0:
-                self._burst_remaining -= 1
-
-            # Frame verkleinern fuer schnellere Analyse
-            h, w = frame.shape[:2]
-            if w > ANALYSIS_FRAME_SIZE:
-                scale = ANALYSIS_FRAME_SIZE / w
-                small = cv2.resize(frame, (ANALYSIS_FRAME_SIZE, int(h * scale)))
-            else:
-                small = frame
-
-            # Beleuchtungsnormalisierung
-            small = normalize_lighting(small)
-
-            try:
-                face = analyze_emotion_frame(small)
-
-                if isinstance(face, dict):
-                    scores = face.get("emotion", {})
-                    dominant = face.get("dominant_emotion", "neutral")
-                    confidence = scores.get(dominant, 0.0) / 100.0
-
-                    # Kalibrierung auch fuer unsichere Frames anwenden,
-                    # damit der Soft-Update-Pfad konsistent bleibt.
-                    scores = self._apply_calibration(scores)
-                    quality = self._compute_prediction_quality(scores)
-
-                    if confidence >= MIN_CONFIDENCE:
-                        self._last_face_time = time.time()
-
-                        # EMA mit Confidence-Gewichtung aktualisieren
-                        self._update_ema(scores, confidence)
-
-                        # Burst pruefen
-                        self._check_burst(confidence)
-
-                        best, best_w = self._dominant_emotion()
-                        valence, arousal = self._compute_valence_arousal()
-                        trend_v = self._compute_trend()
-
-                        with self._lock:
-                            self._result = {
-                                "emotion": best,
-                                "confidence": confidence,
-                                "quality": quality,
-                                "ema_vector": self._ema.copy(),
-                                "valence": valence,
-                                "arousal": arousal,
-                                "trend_valence": trend_v,
-                            }
-                    elif confidence >= SOFT_MIN_CONFIDENCE:
-                        self._last_face_time = time.time()
-
-                        # Unsichere Vorhersagen nur schwach einmischen statt hart zu verwerfen.
-                        soft_conf = confidence * LOW_CONFIDENCE_ALPHA_SCALE
-                        self._update_ema(scores, soft_conf)
-
-                        best, best_w = self._dominant_emotion()
-                        valence, arousal = self._compute_valence_arousal()
-                        trend_v = self._compute_trend()
-
-                        with self._lock:
-                            self._result = {
-                                "emotion": best,
-                                "confidence": confidence,
-                                "quality": quality,
-                                "ema_vector": self._ema.copy(),
-                                "valence": valence,
-                                "arousal": arousal,
-                                "trend_valence": trend_v,
-                            }
-                    else:
-                        self._maybe_fallback()
-                else:
-                    self._maybe_fallback()
-
-            except Exception as exc:
-                ERR_TELEMETRY.record(
-                    component="emotion",
-                    code=DEEPFACE_ANALYZE_FAILED,
-                    detail="DeepFace.analyze failed, fallback applied",
-                    exc=exc,
-                    level=logging.DEBUG,
-                    cooldown_s=10.0,
-                )
-                self._maybe_fallback()
-
-    def _maybe_fallback(self):
-        """Driftet EMA-Vektor sanft Richtung neutral wenn zu lange kein Gesicht erkannt."""
-        if time.time() - self._last_face_time > FALLBACK_AFTER_SECONDS:
-            d = FALLBACK_DECAY
-            self._ema_prev = self._ema.copy()
-            for e in self._EMOTIONS:
-                target = 1.0 if e == "neutral" else 0.0
-                self._ema[e] = (1.0 - d) * self._ema[e] + d * target
-            normalize_vector_inplace(self._ema, self._EMOTIONS)
-
-            best, _ = self._dominant_emotion()
-            valence, arousal = self._compute_valence_arousal()
-            with self._lock:
-                self._result = {
-                    "emotion": best,
-                    "confidence": 0.0,
-                    "quality": 0.0,
-                    "ema_vector": self._ema.copy(),
-                    "valence": valence,
-                    "arousal": arousal,
-                    "trend_valence": 0.0,
-                }
-
-    def get(self) -> dict:
-        with self._lock:
-            return self._result.copy()
-
-    def stop(self):
-        self._running = False
 
 
 # ──────────────────────── Main Loop ────────────────────────────
@@ -1071,27 +480,6 @@ def _pseudonymize_identity(value: str | None, salt: str) -> str | None:
         return None
     raw = f"{salt}:{value}".encode("utf-8")
     return hashlib.sha256(raw).hexdigest()[:16]
-
-
-class _MockBridgeController:
-    """Simuliert HueController ohne echte Hardware."""
-
-    def __init__(self):
-        log.info("[MOCK] HueController aktiv – keine echte Bridge.")
-
-    def apply(self, params: dict, transition: int = 0):
-        log.info(
-            "[MOCK] Hue-Befehl: hue=%d bri=%d sat=%d",
-            params["hue"],
-            params["bri"],
-            params["sat"],
-        )
-
-    def off(self):
-        log.info("[MOCK] Lampe ausschalten simuliert.")
-
-    def shutdown(self):
-        return None
 
 
 def _build_top3_text(fused_ema: dict, emotion: str, confidence: float) -> str:
@@ -1384,6 +772,12 @@ def _draw_overlay(
     torso_lean: float = 0.0,
     shoulder_drop: float = 0.0,
     head_tilt: float = 0.0,
+    *,
+    cognitive_state: str = "",
+    cognitive_confidence: float = 0.0,
+    active_mode: str = "",
+    break_event=None,
+    feedback_flash: tuple[bool, str] = (False, ""),
 ):
     """Renders runtime telemetry text on the camera frame."""
     x0 = 28
@@ -1439,6 +833,12 @@ def _draw_overlay(
     if activity_result is not None:
         panel_lines += 1
     if torso_lean != 0 or shoulder_drop > 0 or head_tilt != 0:
+        panel_lines += 1
+    if cognitive_state or active_mode:
+        panel_lines += 1
+    if break_event is not None:
+        panel_lines += 1
+    if feedback_flash[0]:
         panel_lines += 1
 
     panel_h = panel_lines * line_h + 20
@@ -1596,6 +996,58 @@ def _draw_overlay(
         _draw_text(pose_str, y_next, (180, 220, 255), scale=0.50, weight=1)
         y_next += line_h
 
+    # Kognitiver Zustand + Modus anzeigen
+    if cognitive_state or active_mode:
+        cog_parts = []
+        if cognitive_state:
+            cog_parts.append(f"Zustand:{cognitive_state}({cognitive_confidence:.0%})")
+        if active_mode:
+            cog_parts.append(f"Modus:{active_mode}")
+        cog_str = "  ".join(cog_parts)
+        _cog_colors = {
+            "FOCUS": (255, 220, 100),
+            "FLOW": (100, 255, 200),
+            "FATIGUE": (100, 140, 255),
+            "STRESS": (80, 80, 255),
+            "NEUTRAL": (200, 200, 200),
+        }
+        cog_color = _cog_colors.get(cognitive_state, (200, 200, 200))
+        _draw_text(cog_str, y_next, cog_color, scale=0.50, weight=1)
+        y_next += line_h
+
+    # Pausen-Info anzeigen
+    if break_event is not None:
+        if break_event.break_active:
+            b_dur = break_event.break_duration_s
+            b_str = f"PAUSE ({b_dur:.0f}s)  [b]=beenden"
+            _draw_text(b_str, y_next, (80, 255, 200), scale=0.55, weight=2)
+            y_next += line_h
+        elif break_event.break_recommended:
+            b_str = f"Pause empfohlen: {break_event.reason}  [b]=starten [n]=spaeter"
+            _draw_text(b_str, y_next, (60, 200, 255), scale=0.50, weight=2)
+            y_next += line_h
+        elif break_event.work_duration_s > 0:
+            work_min = break_event.work_duration_s / 60.0
+            pomo_str = (
+                f"  Pomodoro #{break_event.pomodoro_cycle}"
+                if break_event.pomodoro_cycle > 0
+                else ""
+            )
+            b_str = f"Arbeit: {work_min:.0f}min{pomo_str}"
+            _draw_text(b_str, y_next, (180, 180, 180), scale=0.45, weight=1)
+            y_next += line_h
+
+    # Feedback-Flash anzeigen
+    if feedback_flash[0]:
+        if feedback_flash[1] == "positive":
+            fb_str = "Feedback: Positiv"
+            fb_color = (80, 255, 120)
+        else:
+            fb_str = "Feedback: Negativ"
+            fb_color = (80, 120, 255)
+        _draw_text(fb_str, y_next, fb_color, scale=0.55, weight=2)
+        y_next += line_h
+
     # VA-Diagramm: zeigt Ist-Zustand, Ziel und Regulierungsrichtung (oben rechts)
     if reg_info is not None:
         _draw_va_diagram(
@@ -1669,7 +1121,7 @@ def main():
 
     # --- Hue Bridge verbinden ---
     if args.mock:
-        hue = _MockBridgeController()
+        hue = MockBridgeController()
     else:
         try:
             hue = HueController(bridge_ip, light_ids, light_roles=HUE_LIGHT_ROLES)
@@ -1938,7 +1390,9 @@ def main():
 
     # --- Modus-System (optional) ---
     mode_manager = None
-    use_modes = USE_MODE_SYSTEM and not args.no_cognitive  # benoetigt Klassifikator fuer AUTO
+    use_modes = (
+        USE_MODE_SYSTEM and not args.no_cognitive
+    )  # benoetigt Klassifikator fuer AUTO
     if use_modes:
         initial_mode = args.mode or DEFAULT_MODE
         mode_manager = ModeManager(initial_mode=initial_mode)
@@ -2080,7 +1534,7 @@ def main():
             if (
                 analyzer.burst_active and burst_allowed
             ) or frame_count % analysis_every_n == 0:
-                analyzer_frame = _resize_for_width(frame, ANALYSIS_FRAME_SIZE)
+                analyzer_frame = resize_for_width(frame, ANALYSIS_FRAME_SIZE)
                 analyzer.submit(analyzer_frame.copy())
 
             # Pose-Analyse: Frame senden (halbe Rate)
@@ -2089,7 +1543,7 @@ def main():
                 and not low_fps_guard
                 and frame_count % (analysis_every_n * 2) == 0
             ):
-                pose_frame = _resize_for_width(frame, POSE_FRAME_SIZE)
+                pose_frame = resize_for_width(frame, POSE_FRAME_SIZE)
                 pose_analyzer.submit(pose_frame.copy())
 
             # Face-Mesh-Analyse: Frame senden (gleiche Rate wie Hauptanalyse)
@@ -2098,7 +1552,7 @@ def main():
                 and not low_fps_guard
                 and frame_count % analysis_every_n == 0
             ):
-                fm_frame = _resize_for_width(frame, FACE_MESH_FRAME_SIZE)
+                fm_frame = resize_for_width(frame, FACE_MESH_FRAME_SIZE)
                 face_mesh_analyzer.submit(fm_frame.copy())
 
             # HRV-Analyse: Frame senden (eigenes festes Intervall, unabhängig von FPS-Guard)
@@ -2110,7 +1564,7 @@ def main():
                 breathing_analyzer is not None
                 and frame_count % BREATHING_FRAME_INTERVAL == 0
             ):
-                breath_frame = _resize_for_width(frame, POSE_FRAME_SIZE)
+                breath_frame = resize_for_width(frame, POSE_FRAME_SIZE)
                 breathing_analyzer.submit(breath_frame.copy())
 
             # Ergebnisse abrufen
@@ -2284,6 +1738,76 @@ def main():
                     cp["target_v"],
                     cp["target_a"],
                 )
+
+            # --- Kognitiver Zustand aktualisieren ---
+            cognitive_state_str = "NEUTRAL"
+            cognitive_confidence = 0.0
+            cognitive_result = None
+            if cognitive_classifier is not None:
+                hr_bpm_for_cog = 0.0
+                hrv_rmssd_for_cog = 0.0
+                br_bpm_for_cog = 0.0
+                if hrv_result is not None:
+                    hr_bpm_for_cog = hrv_result.get("hr_bpm", 0.0)
+                    hrv_rmssd_for_cog = hrv_result.get("hrv_rmssd", 0.0)
+                if breathing_result is not None:
+                    br_bpm_for_cog = breathing_result.get("br_bpm", 0.0)
+                at_target_cog = (
+                    (reg_info is not None and reg_info.get("at_target", False))
+                    if reg_info is not None
+                    else (
+                        last_reg_info.get("at_target", False)
+                        if last_reg_info
+                        else False
+                    )
+                )
+                cognitive_result = cognitive_classifier.update(
+                    hr_bpm=hr_bpm_for_cog,
+                    hrv_rmssd=hrv_rmssd_for_cog,
+                    blink_rate=blink_rate,
+                    cognitive_load=cognitive_load,
+                    torso_lean=torso_lean,
+                    shoulder_drop=shoulder_drop,
+                    valence=valence,
+                    arousal=arousal,
+                    br_bpm=br_bpm_for_cog,
+                    at_target=at_target_cog,
+                )
+                cognitive_state_str = cognitive_result.state
+                cognitive_confidence = cognitive_result.confidence
+
+            # --- Modus-System aktualisieren ---
+            active_mode_str = "AUTO"
+            if mode_manager is not None:
+                old_mode = mode_manager.update_auto(
+                    cognitive_state_str, time.monotonic()
+                )
+                active_mode_str = mode_manager.active_mode
+                if old_mode != active_mode_str:
+                    log.info("Modus gewechselt: %s → %s", old_mode, active_mode_str)
+                # Modus-Profil auf Regulator und Licht-Parameter anwenden
+                profile = mode_manager.active_profile
+                if not mode_manager.is_auto or circadian is None:
+                    regulator.set_target(profile.target_v, profile.target_a)
+                    regulator._blend_strength = profile.blend_strength
+                    circadian_hue_neg = profile.hue_negative
+                    circadian_hue_pos = profile.hue_positive
+                    circadian_bri_max = profile.bri_max
+                # Pacer-Steuerung durch Modus
+                if pacer is not None and mode_manager is not None:
+                    if profile.pacer_active and not pacer.is_active:
+                        pacer.set_active(True)
+
+            # --- Pausen-Manager aktualisieren ---
+            break_event = None
+            if break_manager is not None:
+                break_event = break_manager.update(cognitive_state_str)
+                if break_event.break_recommended and not break_event.break_active:
+                    log.info(
+                        "Pausenempfehlung: %s (Arbeitszeit: %.0f min)",
+                        break_event.reason,
+                        break_event.work_duration_s / 60.0,
+                    )
 
             if ema_vector and effective_confidence > 0.0:
                 dynamic_face_mesh_weight = 0.0
@@ -2607,6 +2131,13 @@ def main():
                 torso_lean=torso_lean,
                 shoulder_drop=shoulder_drop,
                 head_tilt=head_tilt,
+                cognitive_state=cognitive_state_str,
+                cognitive_confidence=cognitive_confidence,
+                active_mode=active_mode_str,
+                break_event=break_event,
+                feedback_flash=feedback_collector.flash_active
+                if feedback_collector
+                else (False, ""),
             )
 
             if args.session_log and (time.time() - last_session_log_ts) >= 1.0:
@@ -2672,7 +2203,25 @@ def main():
                     "torso_lean": float(torso_lean),
                     "shoulder_drop": float(shoulder_drop),
                     "head_tilt": float(head_tilt),
+                    "cognitive_state": cognitive_state_str,
+                    "cognitive_confidence": float(cognitive_confidence),
+                    "active_mode": active_mode_str,
+                    "break_active": break_event.break_active if break_event else False,
+                    "break_recommended": break_event.break_recommended
+                    if break_event
+                    else False,
+                    "break_reason": break_event.reason if break_event else "",
+                    "work_duration_s": break_event.work_duration_s
+                    if break_event
+                    else 0.0,
+                    "recovery_quality": break_event.recovery_quality
+                    if break_event
+                    else 0.0,
                 }
+                if feedback_collector is not None:
+                    fb_data = feedback_collector.get_feedback_for_log()
+                    if fb_data:
+                        payload.update(fb_data)
                 _append_session_log(args.session_log, payload)
                 last_session_log_ts = time.time()
 
@@ -2680,6 +2229,43 @@ def main():
                 cv2.imshow("Emotion Light", frame)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("q"):
+                    break
+                if key == ord("m") and mode_manager is not None:
+                    mode_manager.cycle_mode()
+                    log.info("Modus manuell gewechselt: %s", mode_manager.active_mode)
+                if key == ord("f") and feedback_collector is not None:
+                    if feedback_collector.record(
+                        "positive",
+                        cognitive_state=cognitive_state_str,
+                        active_mode=active_mode_str,
+                        valence=fused_v,
+                        arousal=fused_a,
+                    ):
+                        log.info("Feedback: positiv")
+                if key == ord("d") and feedback_collector is not None:
+                    if feedback_collector.record(
+                        "negative",
+                        cognitive_state=cognitive_state_str,
+                        active_mode=active_mode_str,
+                        valence=fused_v,
+                        arousal=fused_a,
+                    ):
+                        log.info("Feedback: negativ")
+                if key == ord("b") and break_manager is not None:
+                    if break_manager.is_break_active:
+                        break_manager.skip_break()
+                        log.info("Pause manuell beendet.")
+                    else:
+                        break_manager.start_break()
+                        log.info("Pause manuell gestartet.")
+                if (
+                    key == ord("n")
+                    and break_manager is not None
+                    and break_event is not None
+                ):
+                    if break_event.break_recommended and not break_event.break_active:
+                        break_manager.dismiss_break()
+                        log.info("Pausenempfehlung abgelehnt.")
                     break
                 if cv2.getWindowProperty("Emotion Light", cv2.WND_PROP_VISIBLE) < 1:
                     break

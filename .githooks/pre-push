@@ -1,0 +1,65 @@
+#!/usr/bin/env sh
+set -eu
+
+if [ "${AUTO_DOC_SKIP_PREPUSH:-0}" = "1" ]; then
+  exit 0
+fi
+
+ROOT_DIR="$(git rev-parse --show-toplevel)"
+ZERO_SHA="0000000000000000000000000000000000000000"
+DOC_PATH='^docs/IMPORTANT_CHANGES\.md$'
+SCRIPT_PATH="$ROOT_DIR/tools/auto_document_changes.py"
+
+if [ -x "$ROOT_DIR/.venv/Scripts/python.exe" ]; then
+  PYTHON_CMD="$ROOT_DIR/.venv/Scripts/python.exe"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_CMD="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_CMD="python"
+else
+  echo "[auto-doc] Push gate skipped: no Python interpreter found for important-path evaluation." >&2
+  exit 0
+fi
+
+has_important_changes=0
+has_docs_update=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  local_ref="$(printf '%s' "${local_ref:-}" | tr -d '\r')"
+  local_sha="$(printf '%s' "${local_sha:-}" | tr -d '\r')"
+  remote_ref="$(printf '%s' "${remote_ref:-}" | tr -d '\r')"
+  remote_sha="$(printf '%s' "${remote_sha:-}" | tr -d '\r')"
+
+  if [ -z "${local_sha:-}" ] || [ "$local_sha" = "$ZERO_SHA" ]; then
+    continue
+  fi
+
+  if [ "$remote_sha" = "$ZERO_SHA" ]; then
+    range="$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+
+  changed_files="$(git -C "$ROOT_DIR" diff --name-only --diff-filter=ACMR "$range" || true)"
+  if [ -z "$changed_files" ]; then
+    continue
+  fi
+
+  if [ -f "$SCRIPT_PATH" ] && printf '%s\n' "$changed_files" | "$PYTHON_CMD" "$SCRIPT_PATH" --filter-important-stdin | grep -q '.'; then
+    has_important_changes=1
+  fi
+
+  if echo "$changed_files" | grep -E "$DOC_PATH" >/dev/null 2>&1; then
+    has_docs_update=1
+  fi
+done
+
+if [ "$has_important_changes" -eq 1 ] && [ "$has_docs_update" -eq 0 ]; then
+  echo "[auto-doc] Push blocked: important changes detected, but docs/IMPORTANT_CHANGES.md is not updated in pushed commits." >&2
+  echo "[auto-doc] Run: .venv/Scripts/python.exe tools/auto_document_changes.py --working-tree --actor copilot-agent" >&2
+  echo "[auto-doc] Then commit docs/IMPORTANT_CHANGES.md and push again." >&2
+  echo "[auto-doc] Temporary bypass (only if intentional): AUTO_DOC_SKIP_PREPUSH=1 git push" >&2
+  exit 1
+fi
+
+exit 0

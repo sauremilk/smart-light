@@ -1,0 +1,11 @@
+# Important paths for automatic change documentation.
+# Prefix rules end with '/'. Exact file rules have no trailing slash.
+core/
+analyzers/
+main.py
+config.py
+benchmarks/reference_suite.py
+requirements.txt
+README.md
+AGENTS.md
+.github/copilot-instructions.md

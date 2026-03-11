@@ -13,11 +13,17 @@ This repository uses a benchmark-first workflow. Every coding agent must use the
 
 - After meaningful changes, rerun quick profile.
 - If composite index or any component regresses, fix before continuing.
+- Keep important changes documented during long agent sessions (even without commit):
+- `c:/Users/mickg/smart-light/.venv/Scripts/python.exe tools/auto_document_changes.py --working-tree --actor copilot-agent`
 
 3. Before handoff / merge:
 
 - Run standard profile with gate enforcement:
 - `c:/Users/mickg/smart-light/.venv/Scripts/python.exe benchmarks/reference_suite.py --profile standard --enforce-gate`
+- Ensure documentation gate will pass on push:
+- `docs/IMPORTANT_CHANGES.md` must be included whenever important files changed.
+- Important path definitions are centralized in:
+- `tools/auto_doc_important_paths.txt`
 
 4. Release-quality verification:
 

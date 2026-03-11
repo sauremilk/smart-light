@@ -16,10 +16,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = $PSScriptRoot
-$VenvPath    = Join-Path $ProjectRoot ".venv"
-$PythonExe   = Join-Path $VenvPath "Scripts\python.exe"
-$PipExe      = Join-Path $VenvPath "Scripts\pip.exe"
-$ReqFile     = Join-Path $ProjectRoot "requirements.txt"
+$VenvPath = Join-Path $ProjectRoot ".venv"
+$PythonExe = Join-Path $VenvPath "Scripts\python.exe"
+$PipExe = Join-Path $VenvPath "Scripts\pip.exe"
+$ReqFile = Join-Path $ProjectRoot "requirements.txt"
+$GitHooksDir = Join-Path $ProjectRoot ".githooks"
 
 Write-Host "=== Emotion-Light Setup ===" -ForegroundColor Cyan
 Write-Host "Projektordner: $ProjectRoot"
@@ -35,7 +36,8 @@ if (-not (Test-Path $VenvPath)) {
     Write-Host "[1/4] Erstelle virtuelles Environment..." -ForegroundColor Green
     python -m venv $VenvPath
     if ($LASTEXITCODE -ne 0) { throw "venv-Erstellung fehlgeschlagen." }
-} else {
+}
+else {
     Write-Host "[1/4] venv bereits vorhanden, überspringe Erstellung." -ForegroundColor DarkGray
 }
 
@@ -50,11 +52,22 @@ Write-Host "[3/4] Installiere Abhängigkeiten aus requirements.txt..." -Foregrou
 if ($LASTEXITCODE -ne 0) { throw "Paket-Installation fehlgeschlagen." }
 
 # --- Syntax-Check ---
-Write-Host "[4/4] Syntax-Check (main.py, config.py)..." -ForegroundColor Green
+Write-Host "[4/5] Syntax-Check (main.py, config.py)..." -ForegroundColor Green
 & $PythonExe -m py_compile (Join-Path $ProjectRoot "main.py")
 if ($LASTEXITCODE -ne 0) { throw "Syntaxfehler in main.py!" }
 & $PythonExe -m py_compile (Join-Path $ProjectRoot "config.py")
 if ($LASTEXITCODE -ne 0) { throw "Syntaxfehler in config.py!" }
+
+# --- Git-Hooks installieren ---
+Write-Host "[5/5] Konfiguriere lokale Git-Hooks..." -ForegroundColor Green
+if (Test-Path $GitHooksDir) {
+    git -C $ProjectRoot config core.hooksPath .githooks
+    if ($LASTEXITCODE -ne 0) { throw "Git-Hook-Konfiguration fehlgeschlagen." }
+    Write-Host "Git-Hooks aktiviert (core.hooksPath=.githooks)." -ForegroundColor DarkGray
+}
+else {
+    Write-Host "Hinweis: .githooks nicht gefunden, Hook-Installation uebersprungen." -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "=== Setup abgeschlossen! ===" -ForegroundColor Green
