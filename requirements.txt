@@ -13,4 +13,6 @@ mediapipe>=0.10.0
 transformers>=4.30,<5.0
 scipy>=1.10.0
 psutil>=5.9.0
+pynput>=1.7.0
+alexapy>=1.28.0
 

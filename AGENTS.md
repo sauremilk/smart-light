@@ -5,22 +5,27 @@ This repository uses a benchmark-first workflow. Every coding agent must use the
 ## Required Workflow
 
 1. Before implementation:
+
 - Run a quick baseline check:
-- `c:/Users/mickg/smart-light/.venv/Scripts/python.exe benchmarks/reference_suite.py --profile quick`
+- `c:/Users/mickg/smart-light/.venv/Scripts/python.exe benchmarks/reference_suite.py --profile quick --preflight`
 
 2. During implementation:
+
 - After meaningful changes, rerun quick profile.
 - If composite index or any component regresses, fix before continuing.
 
 3. Before handoff / merge:
+
 - Run standard profile with gate enforcement:
 - `c:/Users/mickg/smart-light/.venv/Scripts/python.exe benchmarks/reference_suite.py --profile standard --enforce-gate`
 
 4. Release-quality verification:
+
 - Run strict profile:
 - `c:/Users/mickg/smart-light/.venv/Scripts/python.exe benchmarks/reference_suite.py --profile strict --enforce-gate`
 
 5. Baseline management:
+
 - Update baseline only with explicit approval and evidence:
 - `c:/Users/mickg/smart-light/.venv/Scripts/python.exe benchmarks/reference_suite.py --profile strict --write-baseline`
 
@@ -34,6 +39,7 @@ This repository uses a benchmark-first workflow. Every coding agent must use the
 ## Evidence Standard
 
 Every agent change summary should include:
+
 - reference suite profile used (`quick`, `standard`, or `strict`)
 - previous and current composite index
 - per-component index deltas

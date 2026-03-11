@@ -1,0 +1,977 @@
+{
+  "benchmark": "reference_suite_v2",
+  "generated_at_utc": "2026-03-11T08:06:46Z",
+  "profile": "quick",
+  "settings": {
+    "seed": 17,
+    "detector": "opencv",
+    "preset": {
+      "extreme_limit": 21,
+      "extreme_variants": 1,
+      "accuracy_limit": 21,
+      "seeds": [
+        1
+      ],
+      "e2e_profile": "quick"
+    },
+    "weights": {
+      "extreme_visual_robustness": 0.4,
+      "multi_seed_stability": 0.23,
+      "test_quality": 0.17,
+      "module_sanity": 0.1,
+      "e2e_runtime": 0.1
+    },
+    "active_components": [
+      "extreme_visual_robustness",
+      "multi_seed_stability",
+      "test_quality",
+      "module_sanity"
+    ],
+    "skipped_components": [
+      "e2e_runtime"
+    ],
+    "face_mesh_weight": 0.15,
+    "head_pose_strength": 0.35
+  },
+  "environment": {
+    "platform": {
+      "system": "Windows",
+      "release": "11",
+      "version": "10.0.26200",
+      "machine": "AMD64",
+      "processor": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD"
+    },
+    "python": {
+      "version": "3.13.5",
+      "executable": "C:\\Users\\mickg\\smart-light\\.venv\\Scripts\\python.exe"
+    },
+    "libraries": {
+      "numpy": "2.4.3",
+      "opencv": "4.13.0",
+      "tensorflow": "2.20.0",
+      "torch": "2.10.0+cpu",
+      "mediapipe": "0.10.32"
+    },
+    "hardware": {
+      "torch_cuda": {
+        "available": false,
+        "device_count": 0,
+        "device_name": null,
+        "total_memory_bytes": null,
+        "cuda_version": null,
+        "cudnn_version": null
+      }
+    }
+  },
+  "components": {
+    "extreme_visual_robustness": {
+      "score01": 0.18479853479853475,
+      "details": {
+        "score_index": 185,
+        "enhanced_score_no_face_mesh": 0.18479853479853475,
+        "enhanced_score_with_face_mesh": 0.18479853479853475,
+        "delta_score_with_minus_without_face_mesh": 0.0,
+        "runs": {
+          "no_face_mesh": {
+            "benchmark": "extreme_reference_v1",
+            "benchmark_fingerprint": "0a07b2ee8b87",
+            "settings": {
+              "limit": 21,
+              "seed": 17,
+              "variants_per_sample": 1,
+              "profiles": [
+                "low_light_noise",
+                "motion_blur",
+                "jpeg_artifacts",
+                "occlusion",
+                "rotation_scale",
+                "color_cast_shadow",
+                "mixed_extreme"
+              ],
+              "detector_backend": "opencv",
+              "face_mesh": false,
+              "face_mesh_weight": 0.15,
+              "head_pose_strength": 0.35
+            },
+            "profile_specs": {
+              "low_light_noise": {
+                "description": "Gamma darkening, brightness drop, gaussian sensor noise",
+                "parameters": {
+                  "brightness_range": [
+                    0.32,
+                    0.58
+                  ],
+                  "gamma_range": [
+                    1.25,
+                    1.8
+                  ],
+                  "noise_std_range": [
+                    8.0,
+                    18.0
+                  ]
+                }
+              },
+              "motion_blur": {
+                "description": "Directional blur kernel plus mild gaussian blur",
+                "parameters": {
+                  "kernel_sizes": [
+                    5,
+                    7,
+                    9,
+                    11
+                  ],
+                  "gaussian_sigma_range": [
+                    0.8,
+                    1.6
+                  ]
+                }
+              },
+              "jpeg_artifacts": {
+                "description": "Low quality JPEG compression plus down-up resampling",
+                "parameters": {
+                  "jpeg_quality_range": [
+                    8,
+                    28
+                  ],
+                  "downsample_factor": 2
+                }
+              },
+              "occlusion": {
+                "description": "Solid block occlusion or patch replacement",
+                "parameters": {
+                  "occlusion_width_fraction": [
+                    0.2,
+                    0.45
+                  ],
+                  "occlusion_height_fraction": [
+                    0.18,
+                    0.4
+                  ],
+                  "modes": [
+                    "solid_rect",
+                    "patch_shuffle"
+                  ]
+                }
+              },
+              "rotation_scale": {
+                "description": "Affine transform with rotation, scale and translation",
+                "parameters": {
+                  "angle_range_deg": [
+                    -22.0,
+                    22.0
+                  ],
+                  "scale_range": [
+                    0.78,
+                    1.18
+                  ],
+                  "translation_fraction": [
+                    -0.08,
+                    0.08
+                  ]
+                }
+              },
+              "color_cast_shadow": {
+                "description": "Channel gains and directional shadow gradient",
+                "parameters": {
+                  "channel_gain_range": [
+                    0.6,
+                    1.35
+                  ],
+                  "shadow_strength_range": [
+                    0.25,
+                    0.55
+                  ],
+                  "shadow_axis": [
+                    "x",
+                    "y"
+                  ]
+                }
+              },
+              "mixed_extreme": {
+                "description": "Chained transform: rotation -> low light/noise -> occlusion -> JPEG artifacts",
+                "parameters": {
+                  "composition_order": [
+                    "rotation_scale",
+                    "low_light_noise",
+                    "occlusion",
+                    "jpeg_artifacts"
+                  ]
+                }
+              }
+            },
+            "dataset": {
+              "base_samples": 21,
+              "hard_samples": 21,
+              "profiles": [
+                "low_light_noise",
+                "motion_blur",
+                "jpeg_artifacts",
+                "occlusion",
+                "rotation_scale",
+                "color_cast_shadow",
+                "mixed_extreme"
+              ],
+              "failed_predictions": 0
+            },
+            "baseline": {
+              "accuracy": 0.19047619047619047,
+              "macro_f1": 0.1510989010989011,
+              "weighted_score": 0.16684981684981687,
+              "index": 167,
+              "confusion_matrix": [
+                [
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  2
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  3,
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  2,
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  2,
+                  0,
+                  0,
+                  1
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  2,
+                  0,
+                  0,
+                  1
+                ],
+                [
+                  0,
+                  0,
+                  1,
+                  1,
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  0,
+                  2,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "enhanced": {
+              "accuracy": 0.23809523809523808,
+              "macro_f1": 0.14926739926739924,
+              "weighted_score": 0.18479853479853475,
+              "index": 185,
+              "confusion_matrix": [
+                [
+                  0,
+                  0,
+                  0,
+                  1,
+                  1,
+                  0,
+                  1
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  3,
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  1,
+                  0,
+                  0,
+                  2,
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  3,
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1,
+                  0,
+                  1,
+                  0,
+                  1
+                ],
+                [
+                  0,
+                  0,
+                  1,
+                  1,
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  0,
+                  2,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "delta": {
+              "accuracy": 0.047619047619047616,
+              "macro_f1": -0.0018315018315018528,
+              "weighted_score": 0.017948717948717885,
+              "index": 18
+            },
+            "relative": {
+              "enhanced_percent_of_baseline": {
+                "accuracy": 125.0,
+                "macro_f1": 98.78787878787877,
+                "weighted_score": 110.7574094401756,
+                "index": 110.77844311377245
+              }
+            },
+            "hardness": {
+              "hardest_profile": "low_light_noise",
+              "hardest_profile_enhanced_weighted_score": 0.0,
+              "per_profile": {
+                "low_light_noise": {
+                  "n": 3,
+                  "baseline_accuracy": 0.0,
+                  "baseline_macro_f1": 0.0,
+                  "enhanced_accuracy": 0.0,
+                  "enhanced_macro_f1": 0.0,
+                  "enhanced_weighted_score": 0.0
+                },
+                "motion_blur": {
+                  "n": 3,
+                  "baseline_accuracy": 0.3333333333333333,
+                  "baseline_macro_f1": 0.14285714285714285,
+                  "enhanced_accuracy": 0.3333333333333333,
+                  "enhanced_macro_f1": 0.07142857142857142,
+                  "enhanced_weighted_score": 0.17619047619047618
+                },
+                "jpeg_artifacts": {
+                  "n": 3,
+                  "baseline_accuracy": 0.0,
+                  "baseline_macro_f1": 0.0,
+                  "enhanced_accuracy": 0.3333333333333333,
+                  "enhanced_macro_f1": 0.07142857142857142,
+                  "enhanced_weighted_score": 0.17619047619047618
+                },
+                "occlusion": {
+                  "n": 3,
+                  "baseline_accuracy": 0.3333333333333333,
+                  "baseline_macro_f1": 0.09523809523809523,
+                  "enhanced_accuracy": 0.3333333333333333,
+                  "enhanced_macro_f1": 0.09523809523809523,
+                  "enhanced_weighted_score": 0.19047619047619047
+                },
+                "rotation_scale": {
+                  "n": 3,
+                  "baseline_accuracy": 0.6666666666666666,
+                  "baseline_macro_f1": 0.23809523809523808,
+                  "enhanced_accuracy": 0.6666666666666666,
+                  "enhanced_macro_f1": 0.23809523809523808,
+                  "enhanced_weighted_score": 0.4095238095238095
+                },
+                "color_cast_shadow": {
+                  "n": 3,
+                  "baseline_accuracy": 0.0,
+                  "baseline_macro_f1": 0.0,
+                  "enhanced_accuracy": 0.0,
+                  "enhanced_macro_f1": 0.0,
+                  "enhanced_weighted_score": 0.0
+                },
+                "mixed_extreme": {
+                  "n": 3,
+                  "baseline_accuracy": 0.0,
+                  "baseline_macro_f1": 0.0,
+                  "enhanced_accuracy": 0.0,
+                  "enhanced_macro_f1": 0.0,
+                  "enhanced_weighted_score": 0.0
+                }
+              }
+            },
+            "runtime": {
+              "total_seconds": 2.0238715999994383,
+              "hard_samples_per_second": 10.376152321128389
+            }
+          },
+          "with_face_mesh": {
+            "benchmark": "extreme_reference_v1",
+            "benchmark_fingerprint": "65623d222cf9",
+            "settings": {
+              "limit": 21,
+              "seed": 17,
+              "variants_per_sample": 1,
+              "profiles": [
+                "low_light_noise",
+                "motion_blur",
+                "jpeg_artifacts",
+                "occlusion",
+                "rotation_scale",
+                "color_cast_shadow",
+                "mixed_extreme"
+              ],
+              "detector_backend": "opencv",
+              "face_mesh": true,
+              "face_mesh_weight": 0.15,
+              "head_pose_strength": 0.35
+            },
+            "profile_specs": {
+              "low_light_noise": {
+                "description": "Gamma darkening, brightness drop, gaussian sensor noise",
+                "parameters": {
+                  "brightness_range": [
+                    0.32,
+                    0.58
+                  ],
+                  "gamma_range": [
+                    1.25,
+                    1.8
+                  ],
+                  "noise_std_range": [
+                    8.0,
+                    18.0
+                  ]
+                }
+              },
+              "motion_blur": {
+                "description": "Directional blur kernel plus mild gaussian blur",
+                "parameters": {
+                  "kernel_sizes": [
+                    5,
+                    7,
+                    9,
+                    11
+                  ],
+                  "gaussian_sigma_range": [
+                    0.8,
+                    1.6
+                  ]
+                }
+              },
+              "jpeg_artifacts": {
+                "description": "Low quality JPEG compression plus down-up resampling",
+                "parameters": {
+                  "jpeg_quality_range": [
+                    8,
+                    28
+                  ],
+                  "downsample_factor": 2
+                }
+              },
+              "occlusion": {
+                "description": "Solid block occlusion or patch replacement",
+                "parameters": {
+                  "occlusion_width_fraction": [
+                    0.2,
+                    0.45
+                  ],
+                  "occlusion_height_fraction": [
+                    0.18,
+                    0.4
+                  ],
+                  "modes": [
+                    "solid_rect",
+                    "patch_shuffle"
+                  ]
+                }
+              },
+              "rotation_scale": {
+                "description": "Affine transform with rotation, scale and translation",
+                "parameters": {
+                  "angle_range_deg": [
+                    -22.0,
+                    22.0
+                  ],
+                  "scale_range": [
+                    0.78,
+                    1.18
+                  ],
+                  "translation_fraction": [
+                    -0.08,
+                    0.08
+                  ]
+                }
+              },
+              "color_cast_shadow": {
+                "description": "Channel gains and directional shadow gradient",
+                "parameters": {
+                  "channel_gain_range": [
+                    0.6,
+                    1.35
+                  ],
+                  "shadow_strength_range": [
+                    0.25,
+                    0.55
+                  ],
+                  "shadow_axis": [
+                    "x",
+                    "y"
+                  ]
+                }
+              },
+              "mixed_extreme": {
+                "description": "Chained transform: rotation -> low light/noise -> occlusion -> JPEG artifacts",
+                "parameters": {
+                  "composition_order": [
+                    "rotation_scale",
+                    "low_light_noise",
+                    "occlusion",
+                    "jpeg_artifacts"
+                  ]
+                }
+              }
+            },
+            "dataset": {
+              "base_samples": 21,
+              "hard_samples": 21,
+              "profiles": [
+                "low_light_noise",
+                "motion_blur",
+                "jpeg_artifacts",
+                "occlusion",
+                "rotation_scale",
+                "color_cast_shadow",
+                "mixed_extreme"
+              ],
+              "failed_predictions": 0
+            },
+            "baseline": {
+              "accuracy": 0.19047619047619047,
+              "macro_f1": 0.1510989010989011,
+              "weighted_score": 0.16684981684981687,
+              "index": 167,
+              "confusion_matrix": [
+                [
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  2
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  3,
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  2,
+                  0,
+                  1,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  2,
+                  0,
+                  0,
+                  1
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  2,
+                  0,
+                  0,
+                  1
+                ],
+                [
+                  0,
+                  0,
+                  1,
+                  1,
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  0,
+                  2,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "enhanced": {
+              "accuracy": 0.23809523809523808,
+              "macro_f1": 0.14926739926739924,
+              "weighted_score": 0.18479853479853475,
+              "index": 185,
+              "confusion_matrix": [
+                [
+                  0,
+                  0,
+                  0,
+                  1,
+                  1,
+                  0,
+                  1
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  3,
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  1,
+                  0,
+                  0,
+                  2,
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  3,
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  1,
+                  0,
+                  1,
+                  0,
+                  1
+                ],
+                [
+                  0,
+                  0,
+                  1,
+                  1,
+                  1,
+                  0,
+                  0
+                ],
+                [
+                  0,
+                  0,
+                  0,
+                  0,
+                  2,
+                  0,
+                  1
+                ]
+              ]
+            },
+            "delta": {
+              "accuracy": 0.047619047619047616,
+              "macro_f1": -0.0018315018315018528,
+              "weighted_score": 0.017948717948717885,
+              "index": 18
+            },
+            "relative": {
+              "enhanced_percent_of_baseline": {
+                "accuracy": 125.0,
+                "macro_f1": 98.78787878787877,
+                "weighted_score": 110.7574094401756,
+                "index": 110.77844311377245
+              }
+            },
+            "hardness": {
+              "hardest_profile": "low_light_noise",
+              "hardest_profile_enhanced_weighted_score": 0.0,
+              "per_profile": {
+                "low_light_noise": {
+                  "n": 3,
+                  "baseline_accuracy": 0.0,
+                  "baseline_macro_f1": 0.0,
+                  "enhanced_accuracy": 0.0,
+                  "enhanced_macro_f1": 0.0,
+                  "enhanced_weighted_score": 0.0
+                },
+                "motion_blur": {
+                  "n": 3,
+                  "baseline_accuracy": 0.3333333333333333,
+                  "baseline_macro_f1": 0.14285714285714285,
+                  "enhanced_accuracy": 0.3333333333333333,
+                  "enhanced_macro_f1": 0.07142857142857142,
+                  "enhanced_weighted_score": 0.17619047619047618
+                },
+                "jpeg_artifacts": {
+                  "n": 3,
+                  "baseline_accuracy": 0.0,
+                  "baseline_macro_f1": 0.0,
+                  "enhanced_accuracy": 0.3333333333333333,
+                  "enhanced_macro_f1": 0.07142857142857142,
+                  "enhanced_weighted_score": 0.17619047619047618
+                },
+                "occlusion": {
+                  "n": 3,
+                  "baseline_accuracy": 0.3333333333333333,
+                  "baseline_macro_f1": 0.09523809523809523,
+                  "enhanced_accuracy": 0.3333333333333333,
+                  "enhanced_macro_f1": 0.09523809523809523,
+                  "enhanced_weighted_score": 0.19047619047619047
+                },
+                "rotation_scale": {
+                  "n": 3,
+                  "baseline_accuracy": 0.6666666666666666,
+                  "baseline_macro_f1": 0.23809523809523808,
+                  "enhanced_accuracy": 0.6666666666666666,
+                  "enhanced_macro_f1": 0.23809523809523808,
+                  "enhanced_weighted_score": 0.4095238095238095
+                },
+                "color_cast_shadow": {
+                  "n": 3,
+                  "baseline_accuracy": 0.0,
+                  "baseline_macro_f1": 0.0,
+                  "enhanced_accuracy": 0.0,
+                  "enhanced_macro_f1": 0.0,
+                  "enhanced_weighted_score": 0.0
+                },
+                "mixed_extreme": {
+                  "n": 3,
+                  "baseline_accuracy": 0.0,
+                  "baseline_macro_f1": 0.0,
+                  "enhanced_accuracy": 0.0,
+                  "enhanced_macro_f1": 0.0,
+                  "enhanced_weighted_score": 0.0
+                }
+              }
+            },
+            "runtime": {
+              "total_seconds": 1.0253499000000375,
+              "hard_samples_per_second": 20.48081342768867
+            }
+          }
+        }
+      }
+    },
+    "multi_seed_stability": {
+      "score01": 0.41496598639455784,
+      "details": {
+        "score_index": 415,
+        "mean_enhanced_weighted_score": 0.41496598639455784,
+        "std_enhanced_weighted_score": 0.0,
+        "mean_delta_weighted_score": 0.07006802721088437,
+        "enhanced_weighted_score_stats": {
+          "n": 1,
+          "mean": 0.41496598639455784,
+          "std": 0.0,
+          "sem": 0.0,
+          "ci95_low": 0.41496598639455784,
+          "ci95_high": 0.41496598639455784,
+          "ci95_half_width": 0.0
+        },
+        "delta_weighted_score_stats": {
+          "n": 1,
+          "mean": 0.07006802721088437,
+          "std": 0.0,
+          "sem": 0.0,
+          "ci95_low": 0.07006802721088437,
+          "ci95_high": 0.07006802721088437,
+          "ci95_half_width": 0.0
+        },
+        "per_seed": [
+          {
+            "seed": 1,
+            "enhanced_accuracy": 0.42857142857142855,
+            "enhanced_macro_f1": 0.40589569160997735,
+            "enhanced_weighted_score": 0.41496598639455784,
+            "delta_accuracy": 0.047619047619047616,
+            "delta_macro_f1": 0.08503401360544222,
+            "delta_weighted_score": 0.07006802721088437
+          }
+        ]
+      }
+    },
+    "test_quality": {
+      "score01": 1.0,
+      "details": {
+        "score_index": 1000,
+        "command": "C:\\Users\\mickg\\smart-light\\.venv\\Scripts\\python.exe -m pytest -q tests/test_ema_utils.py tests/test_config_local_override.py tests/test_emotion_regulator.py tests/test_face_mesh_and_color.py tests/test_hrv_analyzer.py tests/test_light_mapping.py tests/test_main_overlay.py tests/test_main_loop_safeguards.py tests/test_reference_suite_gate.py tests/test_runtime_error_telemetry.py tests/test_audio_quality.py tests/test_reference_suite_real_world_extension.py tests/test_session_log_privacy.py tests/test_smart_features.py",
+        "exit_code": 0,
+        "passed": 62,
+        "total": 62,
+        "all_passed": true,
+        "output_tail": "..............................................................           [100%]\n62 passed in 5.01s"
+      }
+    },
+    "module_sanity": {
+      "score01": 1.0,
+      "details": {
+        "score_index": 1000,
+        "passed": 5,
+        "total": 5,
+        "checks": [
+          {
+            "name": "fusion_normalized",
+            "ok": true
+          },
+          {
+            "name": "regulator_moves_toward_target",
+            "ok": true
+          },
+          {
+            "name": "hrv_signal_math",
+            "ok": true
+          },
+          {
+            "name": "breathing_peak_detection",
+            "ok": true
+          },
+          {
+            "name": "face_mesh_emotion_mapping",
+            "ok": true
+          }
+        ]
+      }
+    },
+    "e2e_runtime": {
+      "score01": 0.0,
+      "details": {
+        "score_index": 0,
+        "skipped": true,
+        "reason": "Skipped by --skip-e2e"
+      }
+    }
+  },
+  "composite": {
+    "score01": 0.48817954532240243,
+    "index": 488
+  },
+  "runtime": {
+    "total_seconds": 13.371105100000023,
+    "component_seconds": {
+      "extreme_visual_robustness": 3.050054799999998,
+      "multi_seed_stability": 3.4958375000005617,
+      "test_quality": 5.618946800000231,
+      "module_sanity": 0.0020153000004938804,
+      "e2e_runtime": 0.0,
+      "real_world_uncertainty": 0.00013690000014321413
+    }
+  },
+  "extensions": {
+    "real_world_uncertainty": {
+      "available": false,
+      "reason": "No real-world JSONL files found.",
+      "input_files": []
+    }
+  },
+  "gate": {
+    "baseline_present": true,
+    "pass": false,
+    "reasons": [
+      "Component regression extreme_visual_robustness: current=0.1848, baseline=0.2840, allowed_drop=0.0400",
+      "Gate partial-check mode: skipped components=e2e_runtime. Composite drop check disabled."
+    ],
+    "failures": [
+      "Component regression extreme_visual_robustness: current=0.1848, baseline=0.2840, allowed_drop=0.0400"
+    ],
+    "warnings": [
+      "Gate partial-check mode: skipped components=e2e_runtime. Composite drop check disabled."
+    ],
+    "baseline_index": 541,
+    "current_index": 488,
+    "benchmark_compatible": true,
+    "baseline_benchmark": "reference_suite_v2",
+    "current_benchmark": "reference_suite_v2"
+  },
+  "relative_to_baseline": {
+    "baseline_present": true,
+    "composite_index_percent_of_baseline": 90.20332717190388,
+    "components_index_percent_of_baseline": {
+      "extreme_visual_robustness": 65.14084507042254,
+      "multi_seed_stability": 154.27509293680296,
+      "test_quality": 100.0,
+      "module_sanity": 100.0,
+      "e2e_runtime": 0.0
+    },
+    "components_score01_percent_of_baseline": {
+      "extreme_visual_robustness": 65.06739632658979,
+      "multi_seed_stability": 154.39573419111156,
+      "test_quality": 100.0,
+      "module_sanity": 100.0,
+      "e2e_runtime": 0.0
+    }
+  },
+  "improvement_targets": [
+    "Prioritaet: visuelle Robustheit steigern (aktuell 0.185)."
+  ],
+  "trend": {
+    "has_previous": false,
+    "basis": "none",
+    "current": {
+      "generated_at_utc": "2026-03-11T08:06:46Z",
+      "profile": "quick",
+      "detector": "opencv",
+      "composite_index": 488,
+      "component_indices": {
+        "extreme_visual_robustness": 185,
+        "multi_seed_stability": 415,
+        "test_quality": 1000,
+        "module_sanity": 1000,
+        "e2e_runtime": 0
+      },
+      "gate_pass": false
+    },
+    "delta": null,
+    "summary": "No previous run in history."
+  }
+}

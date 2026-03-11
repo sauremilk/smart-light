@@ -6,20 +6,20 @@ Alle Verarbeitung erfolgt lokal – keine Cloud-APIs.
 """
 
 import argparse
-import cv2
-import json
-import numpy as np
-import os
-import time
-import sys
-import logging
-import warnings
-import io
 import hashlib
-import threading
+import io
+import json
+import logging
+import os
 import queue
-from collections import defaultdict
-from collections import deque
+import sys
+import threading
+import time
+import warnings
+from collections import defaultdict, deque
+
+import cv2
+import numpy as np
 
 
 def _configure_third_party_runtime_logs():
@@ -35,6 +35,7 @@ def _configure_third_party_runtime_logs():
 
     try:
         from absl import logging as absl_logging
+
         absl_logging.set_verbosity(absl_logging.ERROR)
     except Exception:
         pass
@@ -67,67 +68,154 @@ _configure_third_party_runtime_logs()
 
 from deepface import DeepFace
 from phue import Bridge
-from config import (
-    WEBCAM_INDEX, HUE_BRIDGE_IP, HUE_LIGHT_IDS,
-    FRAME_WIDTH, FRAME_HEIGHT, ANALYSIS_EVERY_N_FRAMES,
-    MIN_ANALYSIS_EVERY_N_FRAMES, MAX_ANALYSIS_EVERY_N_FRAMES,
-    ADAPTIVE_ANALYSIS, ADAPTIVE_FPS_LOW, ADAPTIVE_FPS_HIGH,
-    MIN_RUNTIME_FPS, LOW_FPS_RECOVERY_HYSTERESIS,
-    STARTUP_GUARD_DELAY_SECONDS,
-    DETECTOR_BACKEND, MIN_CONFIDENCE, TRANSITION_TIME,
-    SOFT_MIN_CONFIDENCE, LOW_CONFIDENCE_ALPHA_SCALE,
-    UNCERTAINTY_MARGIN_WEIGHT, UNCERTAINTY_ENTROPY_WEIGHT,
-    LOW_QUALITY_THRESHOLD, LOW_QUALITY_NEUTRAL_BLEND, LOW_QUALITY_MIN_TRANSITION,
-    FALLBACK_AFTER_SECONDS, EMOTION_MAP, FALLBACK_LIGHT,
-    HUE_MIN_UPDATE_INTERVAL, HUE_HUE_QUANT, HUE_BRI_QUANT, HUE_SAT_QUANT,
-    ANALYSIS_FRAME_SIZE, EMA_ALPHA, EMA_MIN_WEIGHT,
-    FALLBACK_DECAY, TARGET_FPS, CAMERA_BUFFER_SIZE,
-    CLAHE_CLIP_LIMIT, USE_COLOR_CONSTANCY,
-    USE_VALENCE_AROUSAL, VALENCE_AROUSAL_MAP,
-    VA_HUE_NEGATIVE, VA_HUE_NEUTRAL, VA_HUE_POSITIVE,
-    VA_BRI_LOW, VA_BRI_HIGH, VA_SAT_LOW, VA_SAT_HIGH,
-    TREND_INFLUENCE, BURST_CONFIDENCE_DELTA, BURST_FRAMES,
-    USE_AUDIO, AUDIO_WEIGHT, USE_POSE, POSE_WEIGHT,
-    AUDIO_DYNAMIC_MIN_FACTOR, AUDIO_DYNAMIC_QUALITY_EXPONENT,
-    USE_FACE_MESH, FACE_MESH_WEIGHT, FACE_MESH_FRAME_SIZE,
-    USE_HEAD_POSE_CONFIDENCE, HEAD_POSE_CONFIDENCE_STRENGTH,
-    CALIBRATION_FILE, POSE_FRAME_SIZE,
-    ABSENCE_LIGHT_OFF_SECONDS,
-    USE_HRV, HRV_WINDOW_SECONDS, HRV_FRAME_INTERVAL, HRV_AROUSAL_INFLUENCE,
-    HRV_MIN_CONFIDENCE, HRV_BASELINE_BPM, HRV_BASELINE_ADAPT_ALPHA,
-    HRV_OFFSET_EMA_ALPHA, HRV_OFFSET_CLAMP,
-    USE_BREATHING, BREATHING_WINDOW_SECONDS, BREATHING_FRAME_INTERVAL,
-    BREATHING_AROUSAL_INFLUENCE, BREATHING_MIN_CONFIDENCE,
-    BREATHING_BASELINE_SECONDS, BREATHING_BASELINE_ADAPT_ALPHA,
-    BREATHING_OFFSET_EMA_ALPHA, BREATHING_OFFSET_CLAMP,
-    BREATHING_TRANSITION_INFLUENCE,
-    ADAPTIVE_REGULATION,
-    ADAPTIVE_TARGET_VALENCE, ADAPTIVE_TARGET_AROUSAL,
-    ADAPTIVE_BLEND_STRENGTH, ADAPTIVE_BLEND_MAX,
-    ADAPTIVE_PROGRESS_TIMEOUT, ADAPTIVE_BLEND_ESCALATION,
-    ADAPTIVE_AT_TARGET_THRESHOLD,
-    USE_CIRCADIAN, CIRCADIAN_UPDATE_INTERVAL,
-    USE_BREATHING_PACER, BREATHING_PACER_BPM, BREATHING_PACER_AMPLITUDE,
-    BREATHING_PACER_FADE_IN, BREATHING_PACER_BR_THRESHOLD,
-    HUE_LIGHT_ROLES,
-    PREDICTIVE_TREND_THRESHOLD, PREDICTIVE_TRIGGER_SECONDS,
-    PREDICTIVE_BOOST_FACTOR, PREDICTIVE_BOOST_DURATION,
-    USE_FACE_FINETUNE_ONNX, FACE_FINETUNE_ONNX_PATH,
-)
-from core.ema_utils import update_ema_vector_inplace, normalize_vector_inplace
-from core.light_mapping import (
-    valence_arousal_to_light, blend_emotion_colors, fuse_modalities, compute_va_from_ema,
-    BreathingPacer, compose_multi_light_scene,
-)
-from core.emotion_regulator import EmotionRegulator
+
 from analyzers.audio_quality import effective_audio_weight
 from analyzers.breathing_analyzer import BR_REST_BPM
+from config import (
+    ABSENCE_LIGHT_OFF_SECONDS,
+    ACTIVITY_AROUSAL_INFLUENCE,
+    ACTIVITY_TRANSITION_INFLUENCE,
+    ADAPTIVE_ANALYSIS,
+    ADAPTIVE_AT_TARGET_THRESHOLD,
+    ADAPTIVE_BLEND_ESCALATION,
+    ADAPTIVE_BLEND_MAX,
+    ADAPTIVE_BLEND_STRENGTH,
+    ADAPTIVE_FPS_HIGH,
+    ADAPTIVE_FPS_LOW,
+    ADAPTIVE_PROGRESS_TIMEOUT,
+    ADAPTIVE_REGULATION,
+    ADAPTIVE_TARGET_AROUSAL,
+    ADAPTIVE_TARGET_VALENCE,
+    ALEXA_AMAZON_URL,
+    ALEXA_COOLDOWN_SECONDS,
+    ALEXA_DEVICE_NAME,
+    ALEXA_EMAIL,
+    ALEXA_MOOD_PLAYLISTS,
+    ALEXA_MUSIC_PROVIDER,
+    ALEXA_PASSWORD,
+    ALEXA_VOLUME_CONTROL,
+    ANALYSIS_EVERY_N_FRAMES,
+    ANALYSIS_FRAME_SIZE,
+    AUDIO_DYNAMIC_MIN_FACTOR,
+    AUDIO_DYNAMIC_QUALITY_EXPONENT,
+    AUDIO_WEIGHT,
+    BLINK_RATE_FATIGUE_THRESHOLD,
+    BLINK_RATE_FOCUS_THRESHOLD,
+    BLINK_VALENCE_INFLUENCE,
+    BREATHING_AROUSAL_INFLUENCE,
+    BREATHING_BASELINE_ADAPT_ALPHA,
+    BREATHING_BASELINE_SECONDS,
+    BREATHING_FRAME_INTERVAL,
+    BREATHING_MIN_CONFIDENCE,
+    BREATHING_OFFSET_CLAMP,
+    BREATHING_OFFSET_EMA_ALPHA,
+    BREATHING_PACER_AMPLITUDE,
+    BREATHING_PACER_BPM,
+    BREATHING_PACER_BR_THRESHOLD,
+    BREATHING_PACER_FADE_IN,
+    BREATHING_TRANSITION_INFLUENCE,
+    BREATHING_WINDOW_SECONDS,
+    BURST_CONFIDENCE_DELTA,
+    BURST_FRAMES,
+    CALIBRATION_FILE,
+    CAMERA_BUFFER_SIZE,
+    CIRCADIAN_UPDATE_INTERVAL,
+    CLAHE_CLIP_LIMIT,
+    DETECTOR_BACKEND,
+    EMA_ALPHA,
+    EMA_MIN_WEIGHT,
+    EMOTION_MAP,
+    FACE_FINETUNE_ONNX_PATH,
+    FACE_MESH_FRAME_SIZE,
+    FACE_MESH_WEIGHT,
+    FALLBACK_AFTER_SECONDS,
+    FALLBACK_DECAY,
+    FALLBACK_LIGHT,
+    FRAME_HEIGHT,
+    FRAME_WIDTH,
+    HEAD_POSE_CONFIDENCE_STRENGTH,
+    HEAD_TILT_RELAXATION_THRESHOLD,
+    HRV_AROUSAL_INFLUENCE,
+    HRV_BASELINE_ADAPT_ALPHA,
+    HRV_BASELINE_BPM,
+    HRV_FRAME_INTERVAL,
+    HRV_MIN_CONFIDENCE,
+    HRV_OFFSET_CLAMP,
+    HRV_OFFSET_EMA_ALPHA,
+    HRV_WINDOW_SECONDS,
+    HUE_BRI_QUANT,
+    HUE_BRIDGE_IP,
+    HUE_HUE_QUANT,
+    HUE_LIGHT_IDS,
+    HUE_LIGHT_ROLES,
+    HUE_MIN_UPDATE_INTERVAL,
+    HUE_SAT_QUANT,
+    LOW_CONFIDENCE_ALPHA_SCALE,
+    LOW_FPS_RECOVERY_HYSTERESIS,
+    LOW_QUALITY_MIN_TRANSITION,
+    LOW_QUALITY_NEUTRAL_BLEND,
+    LOW_QUALITY_THRESHOLD,
+    MAX_ANALYSIS_EVERY_N_FRAMES,
+    MIN_ANALYSIS_EVERY_N_FRAMES,
+    MIN_CONFIDENCE,
+    MIN_RUNTIME_FPS,
+    POSE_FRAME_SIZE,
+    POSE_WEIGHT,
+    PREDICTIVE_BOOST_DURATION,
+    PREDICTIVE_BOOST_FACTOR,
+    PREDICTIVE_TREND_THRESHOLD,
+    PREDICTIVE_TRIGGER_SECONDS,
+    PROSODIC_AROUSAL_INFLUENCE,
+    PROSODIC_PITCH_CALM_HZ,
+    PROSODIC_PITCH_STRESS_HZ,
+    PROSODIC_SPEECH_RATE_HIGH,
+    PROSODIC_SPEECH_RATE_LOW,
+    PUPIL_AROUSAL_INFLUENCE,
+    PUPIL_DILATION_BASELINE,
+    PUPIL_OFFSET_CLAMP,
+    SHOULDER_DROP_VALENCE_INFLUENCE,
+    SOFT_MIN_CONFIDENCE,
+    STARTUP_GUARD_DELAY_SECONDS,
+    TARGET_FPS,
+    TORSO_LEAN_AROUSAL_INFLUENCE,
+    TRANSITION_TIME,
+    TREND_INFLUENCE,
+    UNCERTAINTY_ENTROPY_WEIGHT,
+    UNCERTAINTY_MARGIN_WEIGHT,
+    USE_ACTIVITY_MONITOR,
+    USE_ALEXA,
+    USE_AUDIO,
+    USE_BREATHING,
+    USE_BREATHING_PACER,
+    USE_CIRCADIAN,
+    USE_COLOR_CONSTANCY,
+    USE_EXTENDED_POSE,
+    USE_FACE_FINETUNE_ONNX,
+    USE_FACE_MESH,
+    USE_HEAD_POSE_CONFIDENCE,
+    USE_HRV,
+    USE_POSE,
+    USE_PROSODIC,
+    USE_PUPIL_BLINK,
+    USE_VALENCE_AROUSAL,
+    VA_BRI_HIGH,
+    VA_BRI_LOW,
+    VA_HUE_NEGATIVE,
+    VA_HUE_NEUTRAL,
+    VA_HUE_POSITIVE,
+    VA_SAT_HIGH,
+    VA_SAT_LOW,
+    VALENCE_AROUSAL_MAP,
+    WEBCAM_INDEX,
+)
 from core.circadian import CircadianSchedule
+from core.ema_utils import normalize_vector_inplace, update_ema_vector_inplace
+from core.emotion_regulator import EmotionRegulator
 from core.error_taxonomy import (
+    ACTIVITY_ANALYZER_INIT_FAILED,
     AUDIO_ANALYZER_INIT_FAILED,
     BREATHING_ANALYZER_INIT_FAILED,
     CALIBRATION_LOAD_FAILED,
-    category_for_error_code,
     DEEPFACE_ANALYZE_FAILED,
     DEEPFACE_WARMUP_FAILED,
     FACEMESH_ANALYZER_INIT_FAILED,
@@ -137,6 +225,15 @@ from core.error_taxonomy import (
     HUE_REENABLE_FAILED,
     HUE_SEND_FAILED,
     POSE_ANALYZER_INIT_FAILED,
+    category_for_error_code,
+)
+from core.light_mapping import (
+    BreathingPacer,
+    blend_emotion_colors,
+    compose_multi_light_scene,
+    compute_va_from_ema,
+    fuse_modalities,
+    valence_arousal_to_light,
 )
 
 logging.basicConfig(
@@ -192,7 +289,9 @@ class OnnxEmotionModel:
     def __init__(self, model_path: str):
         if ort is None:
             raise RuntimeError("onnxruntime is not available")
-        self._session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        self._session = ort.InferenceSession(
+            model_path, providers=["CPUExecutionProvider"]
+        )
         self._input_name = self._session.get_inputs()[0].name
 
     def analyze(self, frame: np.ndarray) -> dict:
@@ -203,7 +302,9 @@ class OnnxEmotionModel:
         logits = self._session.run(None, {self._input_name: x})[0]
         probs = _softmax(logits[0])
 
-        scores = {label: float(probs[i] * 100.0) for i, label in enumerate(self._labels)}
+        scores = {
+            label: float(probs[i] * 100.0) for i, label in enumerate(self._labels)
+        }
         dominant = max(scores, key=scores.get)
         return {"emotion": scores, "dominant_emotion": dominant}
 
@@ -232,7 +333,9 @@ def _init_optional_onnx_model() -> OnnxEmotionModel | None:
         log.info("ONNX emotion backend active: %s", FACE_FINETUNE_ONNX_PATH)
         return model
     except Exception as exc:
-        log.warning("Failed to initialize ONNX backend (%s). Falling back to DeepFace.", exc)
+        log.warning(
+            "Failed to initialize ONNX backend (%s). Falling back to DeepFace.", exc
+        )
         return None
 
 
@@ -322,6 +425,7 @@ ERR_TELEMETRY = RuntimeErrorTelemetry()
 
 # ──────────────────── Hue Controller ───────────────────────────
 
+
 class HueController:
     """Steuert mehrere Philips Hue Lampen mit rollenbasierter Szenen-Komposition."""
 
@@ -338,7 +442,9 @@ class HueController:
         self._sender_thread.start()
         for lid in self.lids:
             self.bridge.set_light(lid, "on", True)
-        log.info("Hue Bridge verbunden, %d Lampen aktiviert: %s", len(self.lids), self.lids)
+        log.info(
+            "Hue Bridge verbunden, %d Lampen aktiviert: %s", len(self.lids), self.lids
+        )
 
     def _sender_loop(self):
         """Sendet Hue-Befehle asynchron, damit der Main-Loop nicht auf I/O wartet."""
@@ -446,7 +552,11 @@ class HueController:
 
 # ───────────── Beleuchtungsnormalisierung ──────────────────────
 
-_clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=(8, 8)) if CLAHE_CLIP_LIMIT > 0 else None
+_clahe = (
+    cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=(8, 8))
+    if CLAHE_CLIP_LIMIT > 0
+    else None
+)
 
 
 def gray_world_correction(frame):
@@ -483,10 +593,13 @@ def _resize_for_width(frame, target_width: int):
     if w <= target_width:
         return frame
     scale = target_width / float(w)
-    return cv2.resize(frame, (target_width, max(1, int(h * scale))), interpolation=cv2.INTER_AREA)
+    return cv2.resize(
+        frame, (target_width, max(1, int(h * scale))), interpolation=cv2.INTER_AREA
+    )
 
 
 # ───────────── Kalibrierung laden ──────────────────────────────
+
 
 def load_calibration(path: str) -> dict:
     """Laedt Kalibrierungs-Offsets aus JSON. Gibt leeres Dict zurueck bei Fehler."""
@@ -511,6 +624,7 @@ def load_calibration(path: str) -> dict:
 
 # ──────────────── Emotion Analyzer (Thread) ────────────────────
 
+
 class EmotionAnalyzer:
     """Asynchrone Emotionserkennung mit EMA-Smoothing, Confidence-Gewichtung,
     CLAHE-Normalisierung, Trend-Analyse und Mikro-Expressions-Burst."""
@@ -528,7 +642,7 @@ class EmotionAnalyzer:
         self._ema = {e: 1.0 / n for e in self._EMOTIONS}
         self._ema_prev = self._ema.copy()  # Vorheriger EMA fuer Trend
         self._avg_confidence = 0.5  # Laufender Durchschnitt der Confidence (fuer Burst)
-        self._burst_remaining = 0   # Verbleibende Burst-Frames
+        self._burst_remaining = 0  # Verbleibende Burst-Frames
         self._result = {
             "emotion": "neutral",
             "confidence": 0.0,
@@ -584,18 +698,24 @@ class EmotionAnalyzer:
         if not filtered:
             return 0.0, 0.0
         total = sum(filtered.values())
-        valence = sum((w / total) * VALENCE_AROUSAL_MAP[e]["valence"]
-                      for e, w in filtered.items())
-        arousal = sum((w / total) * VALENCE_AROUSAL_MAP[e]["arousal"]
-                      for e, w in filtered.items())
+        valence = sum(
+            (w / total) * VALENCE_AROUSAL_MAP[e]["valence"] for e, w in filtered.items()
+        )
+        arousal = sum(
+            (w / total) * VALENCE_AROUSAL_MAP[e]["arousal"] for e, w in filtered.items()
+        )
         return valence, arousal
 
     def _compute_trend(self) -> float:
         """Berechnet Valence-Trend (Differenz zum vorherigen EMA)."""
-        v_now = sum(self._ema.get(e, 0) * VALENCE_AROUSAL_MAP[e]["valence"]
-                    for e in self._EMOTIONS)
-        v_prev = sum(self._ema_prev.get(e, 0) * VALENCE_AROUSAL_MAP[e]["valence"]
-                     for e in self._EMOTIONS)
+        v_now = sum(
+            self._ema.get(e, 0) * VALENCE_AROUSAL_MAP[e]["valence"]
+            for e in self._EMOTIONS
+        )
+        v_prev = sum(
+            self._ema_prev.get(e, 0) * VALENCE_AROUSAL_MAP[e]["valence"]
+            for e in self._EMOTIONS
+        )
         return v_now - v_prev
 
     def _dominant_emotion(self) -> tuple:
@@ -614,7 +734,10 @@ class EmotionAnalyzer:
 
     def _compute_prediction_quality(self, scores: dict) -> float:
         """Berechnet ein robustes Qualitaetsmass aus Margin und Entropie."""
-        raw = np.array([max(0.0, float(scores.get(e, 0.0))) for e in self._EMOTIONS], dtype=np.float64)
+        raw = np.array(
+            [max(0.0, float(scores.get(e, 0.0))) for e in self._EMOTIONS],
+            dtype=np.float64,
+        )
         total = float(raw.sum())
         if total <= 1e-12:
             return 0.0
@@ -765,74 +888,124 @@ class EmotionAnalyzer:
 
 # ──────────────────────── Main Loop ────────────────────────────
 
+
 def _parse_args():
     parser = argparse.ArgumentParser(description="Emotion-gesteuerte Hue-Lampe")
     parser.add_argument(
-        "--mock", action="store_true",
+        "--mock",
+        action="store_true",
         help="Mock-Modus: Webcam und Hue-Bridge simuliert",
     )
     parser.add_argument(
-        "--bridge-ip", default=None, metavar="IP",
+        "--bridge-ip",
+        default=None,
+        metavar="IP",
         help="IP der Hue-Bridge (ueberschreibt config.py)",
     )
     parser.add_argument(
-        "--light-ids", default=None, metavar="IDs",
+        "--light-ids",
+        default=None,
+        metavar="IDs",
         help="Kommagetrennte Lampen-IDs, z.B. 2,3,4,6",
     )
     parser.add_argument(
-        "--no-audio", action="store_true",
+        "--no-audio",
+        action="store_true",
         help="Audio-Emotionserkennung deaktivieren",
     )
     parser.add_argument(
-        "--no-pose", action="store_true",
+        "--no-pose",
+        action="store_true",
         help="Koerpersprache-Analyse deaktivieren",
     )
     parser.add_argument(
-        "--no-face-mesh", action="store_true",
+        "--no-face-mesh",
+        action="store_true",
         help="Face-Mesh / Action-Unit-Analyse deaktivieren",
     )
     parser.add_argument(
-        "--no-head-pose-penalty", action="store_true",
+        "--no-head-pose-penalty",
+        action="store_true",
         help="Kopfpose-Confidence-Abschwaechung deaktivieren",
     )
     parser.add_argument(
-        "--no-hrv", action="store_true",
+        "--no-hrv",
+        action="store_true",
         help="HRV/Herzfrequenz-Messung via rPPG deaktivieren",
     )
     parser.add_argument(
-        "--no-breathing", action="store_true",
+        "--no-breathing",
+        action="store_true",
         help="Atemfrequenz-Erkennung via Schulterbewegung deaktivieren",
     )
     parser.add_argument(
-        "--calibrate", action="store_true",
+        "--no-activity",
+        action="store_true",
+        help="Tastatur/Maus-Aktivitaets-Monitoring deaktivieren",
+    )
+    parser.add_argument(
+        "--no-pupil-blink",
+        action="store_true",
+        help="Pupillen-/Blink-Analyse deaktivieren",
+    )
+    parser.add_argument(
+        "--no-prosodic",
+        action="store_true",
+        help="Prosodische Stimm-Analyse deaktivieren",
+    )
+    parser.add_argument(
+        "--no-extended-pose",
+        action="store_true",
+        help="Erweiterte Koerpersprache-Signale deaktivieren",
+    )
+    parser.add_argument(
+        "--calibrate",
+        action="store_true",
         help="Kalibrierungsmodus starten",
     )
     parser.add_argument(
-        "--calibration-file", default=None, metavar="PATH",
+        "--calibration-file",
+        default=None,
+        metavar="PATH",
         help="Pfad zur Kalibrierungsdatei (ueberschreibt config.py)",
     )
     parser.add_argument(
-        "--session-log", default=None, metavar="PATH",
+        "--session-log",
+        default=None,
+        metavar="PATH",
         help="Optionaler Pfad fuer JSONL-Session-Log (Evaluation adaptiv vs. Kontrolle)",
     )
     parser.add_argument(
-        "--condition", choices=["adaptive", "control"], default=None,
+        "--condition",
+        choices=["adaptive", "control"],
+        default=None,
         help="Bedingung fuer A/B-Studie. Default: aus ADAPTIVE_REGULATION abgeleitet.",
     )
     parser.add_argument(
-        "--participant", default=None, metavar="ID",
+        "--participant",
+        default=None,
+        metavar="ID",
         help="Optionale Teilnehmer-ID fuer Evaluations-Logs",
     )
     parser.add_argument(
-        "--session-id", default=None, metavar="ID",
+        "--session-id",
+        default=None,
+        metavar="ID",
         help="Optionale Session-ID fuer Evaluations-Logs",
     )
     parser.add_argument(
-        "--headless", action="store_true",
+        "--headless",
+        action="store_true",
         help="Deaktiviert OpenCV-Fenster/Keyboard-UI (fuer headless Umgebungen).",
     )
     parser.add_argument(
-        "--pseudonymize-session", action="store_true",
+        "--no-alexa",
+        action="store_true",
+        help="Alexa-Steuerung deaktivieren (auch wenn USE_ALEXA=True in config).",
+    )
+    parser.add_argument(
+        "--pseudonymize-session",
+        action="store_true",
         help="Pseudonymisiert participant/session_id im Session-Log (gesalzener Hash).",
     )
     return parser.parse_args()
@@ -860,8 +1033,12 @@ class _MockBridgeController:
         log.info("[MOCK] HueController aktiv – keine echte Bridge.")
 
     def apply(self, params: dict, transition: int = 0):
-        log.info("[MOCK] Hue-Befehl: hue=%d bri=%d sat=%d",
-                 params["hue"], params["bri"], params["sat"])
+        log.info(
+            "[MOCK] Hue-Befehl: hue=%d bri=%d sat=%d",
+            params["hue"],
+            params["bri"],
+            params["sat"],
+        )
 
     def off(self):
         log.info("[MOCK] Lampe ausschalten simuliert.")
@@ -890,6 +1067,8 @@ def _build_status_text(
     has_hrv: bool = False,
     has_breathing: bool = False,
     low_quality_guardrail: bool = False,
+    has_activity: bool = False,
+    has_pupil_blink: bool = False,
 ) -> str:
     """Builds the status line shown at the bottom of the overlay."""
     modules = ["Video"]
@@ -903,6 +1082,10 @@ def _build_status_text(
         modules.append("HRV")
     if has_breathing:
         modules.append("Breath")
+    if has_activity:
+        modules.append("Activity")
+    if has_pupil_blink:
+        modules.append("Pupil")
     if has_calibration:
         modules.append("Cal")
 
@@ -934,29 +1117,52 @@ def _draw_va_diagram(
     target_v: float,
     target_a: float,
     at_target: bool,
-    size: int = 84,
-    margin: int = 10,
+    size: int = 126,
+    margin: int = 12,
 ):
-    """Zeichnet ein kompaktes Valence-Arousal-Diagramm in die obere rechte Ecke.
+    """Zeichnet ein klar beschriftetes Valence-Arousal-Diagramm oben rechts.
 
     Valence (horizontal): links = negativ, rechts = positiv.
     Arousal  (vertical):  oben  = hoch,    unten  = niedrig.
     """
     h, w = frame.shape[:2]
-    ox = w - size - margin      # linke obere Ecke des Diagramms
+    ox = w - size - margin  # linke obere Ecke des Diagramms
     oy = margin
+    title_h = 20
+    legend_h = 32
+    box_x0 = ox - 10
+    box_y0 = oy - 8
+    box_x1 = ox + size + 10
+    box_y1 = oy + size + title_h + legend_h
 
     # Halbtransparenter Hintergrund
     overlay_buf = frame.copy()
-    cv2.rectangle(overlay_buf, (ox - 4, oy - 4), (ox + size + 4, oy + size + 4), (20, 20, 20), -1)
-    cv2.addWeighted(overlay_buf, 0.50, frame, 0.50, 0, frame)
-    cv2.rectangle(frame, (ox - 4, oy - 4), (ox + size + 4, oy + size + 4), (90, 90, 90), 1)
+    cv2.rectangle(overlay_buf, (box_x0, box_y0), (box_x1, box_y1), (14, 14, 14), -1)
+    cv2.addWeighted(overlay_buf, 0.58, frame, 0.42, 0, frame)
+    cv2.rectangle(frame, (box_x0, box_y0), (box_x1, box_y1), (96, 96, 96), 1)
 
-    # Achsen (Kreuzlinien, grau)
+    # Quadranten subtil einfärben: erleichtert die Orientierung.
     cx = ox + size // 2
     cy = oy + size // 2
-    cv2.line(frame, (ox, cy), (ox + size, cy), (80, 80, 80), 1, cv2.LINE_AA)
-    cv2.line(frame, (cx, oy), (cx, oy + size), (80, 80, 80), 1, cv2.LINE_AA)
+    tint = frame.copy()
+    cv2.rectangle(
+        tint, (ox, oy), (cx, cy), (20, 70, 170), -1
+    )  # low valence, high arousal
+    cv2.rectangle(
+        tint, (cx, oy), (ox + size, cy), (50, 150, 80), -1
+    )  # high valence, high arousal
+    cv2.rectangle(
+        tint, (ox, cy), (cx, oy + size), (80, 100, 150), -1
+    )  # low valence, low arousal
+    cv2.rectangle(
+        tint, (cx, cy), (ox + size, oy + size), (70, 120, 95), -1
+    )  # high valence, low arousal
+    cv2.addWeighted(tint, 0.12, frame, 0.88, 0, frame)
+
+    # Achsen (Kreuzlinien, grau)
+    cv2.line(frame, (ox, cy), (ox + size, cy), (110, 110, 110), 1, cv2.LINE_AA)
+    cv2.line(frame, (cx, oy), (cx, oy + size), (110, 110, 110), 1, cv2.LINE_AA)
+    cv2.rectangle(frame, (ox, oy), (ox + size, oy + size), (90, 90, 90), 1)
 
     def _va_to_px(v: float, a: float):
         """Wandelt (valence, arousal) in Pixel-Koordinaten im Diagramm um."""
@@ -972,28 +1178,127 @@ def _draw_va_diagram(
 
     # Pfeil IST → SOLL (nur wenn nicht am Ziel)
     if not at_target:
-        cv2.arrowedLine(frame, cur_px, tgt_px, (30, 200, 255), 2, cv2.LINE_AA, tipLength=0.25)
+        cv2.arrowedLine(
+            frame, cur_px, tgt_px, (30, 200, 255), 2, cv2.LINE_AA, tipLength=0.25
+        )
 
     # Ziel-Punkt (grün, etwas kleiner)
-    cv2.circle(frame, tgt_px, 4, (60, 220, 90), -1, cv2.LINE_AA)
+    cv2.circle(frame, tgt_px, 5, (60, 220, 90), -1, cv2.LINE_AA)
 
     # Ist-Punkt (cyan)
     col_cur = (80, 220, 110) if at_target else (230, 200, 40)
-    cv2.circle(frame, cur_px, 5, col_cur, -1, cv2.LINE_AA)
+    cv2.circle(frame, cur_px, 6, col_cur, -1, cv2.LINE_AA)
 
     # Mini-Labels
-    label_scale = 0.30
+    label_scale = 0.34
     label_thickness = 1
-    cv2.putText(frame, "IST", (cur_px[0] + 5, cur_px[1] - 5),
-                cv2.FONT_HERSHEY_SIMPLEX, label_scale, col_cur, label_thickness, cv2.LINE_AA)
-    cv2.putText(frame, "SOLL", (tgt_px[0] + 5, tgt_px[1] - 5),
-                cv2.FONT_HERSHEY_SIMPLEX, label_scale, (60, 220, 90), label_thickness, cv2.LINE_AA)
+    cv2.putText(
+        frame,
+        "IST",
+        (cur_px[0] + 5, cur_px[1] - 5),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        label_scale,
+        col_cur,
+        label_thickness,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        frame,
+        "SOLL",
+        (tgt_px[0] + 5, tgt_px[1] - 5),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        label_scale,
+        (60, 220, 90),
+        label_thickness,
+        cv2.LINE_AA,
+    )
 
-    # Achsenbeschriftungen
-    cv2.putText(frame, "V", (ox + size - 8, cy - 3),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.28, (110, 110, 110), 1, cv2.LINE_AA)
-    cv2.putText(frame, "A", (cx + 3, oy + 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.28, (110, 110, 110), 1, cv2.LINE_AA)
+    # Titel + Achsenhinweise
+    cv2.putText(
+        frame,
+        "Valence/Arousal",
+        (ox, oy - 4),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.42,
+        (210, 210, 210),
+        1,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        frame,
+        "-V",
+        (ox + 2, cy - 4),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.30,
+        (150, 150, 150),
+        1,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        frame,
+        "+V",
+        (ox + size - 22, cy - 4),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.30,
+        (150, 150, 150),
+        1,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        frame,
+        "+A",
+        (cx + 4, oy + 12),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.30,
+        (150, 150, 150),
+        1,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        frame,
+        "-A",
+        (cx + 4, oy + size - 4),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.30,
+        (150, 150, 150),
+        1,
+        cv2.LINE_AA,
+    )
+
+    # Mini-Legende
+    ly = oy + size + 14
+    cv2.circle(frame, (ox + 8, ly), 4, col_cur, -1, cv2.LINE_AA)
+    cv2.putText(
+        frame,
+        "IST",
+        (ox + 16, ly + 4),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.34,
+        (220, 220, 220),
+        1,
+        cv2.LINE_AA,
+    )
+    cv2.circle(frame, (ox + 58, ly), 4, (60, 220, 90), -1, cv2.LINE_AA)
+    cv2.putText(
+        frame,
+        "SOLL",
+        (ox + 66, ly + 4),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.34,
+        (220, 220, 220),
+        1,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        frame,
+        "Pfeil = Richtung",
+        (ox, ly + 16),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.32,
+        (165, 165, 165),
+        1,
+        cv2.LINE_AA,
+    )
 
 
 def _draw_overlay(
@@ -1026,16 +1331,46 @@ def _draw_overlay(
     reg_info: dict | None = None,
     circadian_label: str = "",
     pacer_info: dict | None = None,
+    pupil_dilation: float = 0.0,
+    blink_rate: float = 0.0,
+    activity_result: dict | None = None,
+    torso_lean: float = 0.0,
+    shoulder_drop: float = 0.0,
+    head_tilt: float = 0.0,
 ):
     """Renders runtime telemetry text on the camera frame."""
     x0 = 28
     y0 = 44
     line_h = 28
 
-    def _draw_text(text: str, y: int, color: tuple[int, int, int], scale: float = 0.58, weight: int = 1):
+    def _draw_text(
+        text: str,
+        y: int,
+        color: tuple[int, int, int],
+        scale: float = 0.58,
+        weight: int = 1,
+    ):
         # Subtile Kontur + Vordergrund fuer lesbaren, aber ruhigeren Look.
-        cv2.putText(frame, text, (x0, y), cv2.FONT_HERSHEY_SIMPLEX, scale, (15, 15, 15), weight + 2, cv2.LINE_AA)
-        cv2.putText(frame, text, (x0, y), cv2.FONT_HERSHEY_SIMPLEX, scale, color, weight, cv2.LINE_AA)
+        cv2.putText(
+            frame,
+            text,
+            (x0, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            scale,
+            (15, 15, 15),
+            weight + 2,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            frame,
+            text,
+            (x0, y),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            scale,
+            color,
+            weight,
+            cv2.LINE_AA,
+        )
 
     panel_lines = 4
     if reg_info is not None:
@@ -1051,6 +1386,12 @@ def _draw_overlay(
         if breathing_rest_bpm is not None:
             panel_lines += 1
     if lights_off_due_absence or absence_seconds >= FALLBACK_AFTER_SECONDS:
+        panel_lines += 1
+    if pupil_dilation > 0 or blink_rate > 0:
+        panel_lines += 1
+    if activity_result is not None:
+        panel_lines += 1
+    if torso_lean != 0 or shoulder_drop > 0 or head_tilt != 0:
         panel_lines += 1
 
     panel_h = panel_lines * line_h + 20
@@ -1090,15 +1431,17 @@ def _draw_overlay(
         low_quality_guardrail=low_quality_guardrail,
         has_hrv=hrv_result is not None,
         has_breathing=breathing_result is not None,
+        has_activity=activity_result is not None,
+        has_pupil_blink=pupil_dilation > 0 or blink_rate > 0,
     )
     _draw_text(status, y0 + line_h * 3, (205, 205, 95), scale=0.50, weight=1)
 
     # Regulationszeile
     if reg_info is not None:
         if reg_info["at_target"]:
-            reg_color = (80, 220, 110)    # grün = Ziel erreicht
+            reg_color = (80, 220, 110)  # grün = Ziel erreicht
         else:
-            reg_color = (40, 185, 255)    # orange = aktive Regulierung
+            reg_color = (40, 185, 255)  # orange = aktive Regulierung
         blend_pct = reg_info["blend"]
         reg_label = reg_info["label"]
         if blend_pct > 0:
@@ -1109,8 +1452,8 @@ def _draw_overlay(
     # Zirkadian-Zeile anzeigen
     y_next = y0 + line_h * (5 if reg_info is not None else 4)
     if circadian_label:
-        quality: float = 0.0,
-        low_quality_guardrail: bool = False,
+        quality: float = (0.0,)
+        low_quality_guardrail: bool = (False,)
         circ_str = f"Tageszeit: {circadian_label}"
         _draw_text(circ_str, y_next, (180, 200, 255), scale=0.50, weight=1)
         y_next += line_h
@@ -1154,17 +1497,57 @@ def _draw_overlay(
         y_next += line_h
 
         if breathing_rest_bpm is not None:
-            offset_str = f"Atem-Basis:{breathing_rest_bpm:.1f}  Offset:{breathing_offset:+.3f}"
+            offset_str = (
+                f"Atem-Basis:{breathing_rest_bpm:.1f}  Offset:{breathing_offset:+.3f}"
+            )
             _draw_text(offset_str, y_next, (175, 230, 185), scale=0.5, weight=1)
             y_next += line_h
 
     # Abwesenheits-Warnung anzeigen
     if lights_off_due_absence:
-        _draw_text("LICHT AUS - kein Gesicht", y_next, (40, 70, 255), scale=0.6, weight=2)
+        _draw_text(
+            "LICHT AUS - kein Gesicht", y_next, (40, 70, 255), scale=0.6, weight=2
+        )
+        y_next += line_h
     elif absence_seconds >= FALLBACK_AFTER_SECONDS:
         remaining = max(0.0, ABSENCE_LIGHT_OFF_SECONDS - absence_seconds)
         warn_str = f"Kein Gesicht - Licht aus in {remaining:.0f}s"
         _draw_text(warn_str, y_next, (40, 175, 255), scale=0.54, weight=1)
+        y_next += line_h
+
+    # Pupillen-/Blink-Zeile anzeigen
+    if pupil_dilation > 0 or blink_rate > 0:
+        pb_parts = []
+        if pupil_dilation > 0:
+            pb_parts.append(f"Pupille:{pupil_dilation:.2f}")
+        if blink_rate > 0:
+            pb_parts.append(f"Blink:{blink_rate:.0f}/min")
+        pb_str = "  ".join(pb_parts)
+        pb_color = (200, 180, 255)  # Helles Lila
+        _draw_text(pb_str, y_next, pb_color, scale=0.50, weight=1)
+        y_next += line_h
+
+    # Aktivitaets-Zeile anzeigen
+    if activity_result is not None:
+        kpm = activity_result.get("keys_per_minute", 0.0)
+        cl = activity_result.get("cognitive_load", 0.0)
+        act_str = f"Aktivitaet: {kpm:.0f} Tasten/min  Load:{cl:.0%}"
+        act_color = (255, 200, 140)  # Helles Orange
+        _draw_text(act_str, y_next, act_color, scale=0.50, weight=1)
+        y_next += line_h
+
+    # Erweiterte Pose-Zeile anzeigen
+    if torso_lean != 0 or shoulder_drop > 0 or head_tilt != 0:
+        pose_parts = []
+        if torso_lean != 0:
+            pose_parts.append(f"Lean:{torso_lean:+.2f}")
+        if shoulder_drop > 0:
+            pose_parts.append(f"Drop:{shoulder_drop:.2f}")
+        if head_tilt != 0:
+            pose_parts.append(f"Tilt:{head_tilt:+.2f}")
+        pose_str = "Pose: " + "  ".join(pose_parts)
+        _draw_text(pose_str, y_next, (180, 220, 255), scale=0.50, weight=1)
+        y_next += line_h
 
     # VA-Diagramm: zeigt Ist-Zustand, Ziel und Regulierungsrichtung (oben rechts)
     if reg_info is not None:
@@ -1179,8 +1562,11 @@ def _draw_overlay(
 
 
 def _circadian_va_to_light(
-    valence: float, arousal: float,
-    hue_neg: int, hue_pos: int, bri_max: int,
+    valence: float,
+    arousal: float,
+    hue_neg: int,
+    hue_pos: int,
+    bri_max: int,
 ) -> dict:
     """Wie valence_arousal_to_light, aber mit zirkadianen Hue-/Bri-Overrides."""
     if valence >= 0:
@@ -1203,6 +1589,7 @@ def main():
     # --- Kalibrierungsmodus ---
     if args.calibrate:
         from core.calibration import run_calibration
+
         cal_path = args.calibration_file or CALIBRATION_FILE
         run_calibration(cal_path)
         return
@@ -1257,7 +1644,10 @@ def main():
     analyzer = EmotionAnalyzer(calibration=calibration)
     analyzer.start()
     backend_name = "onnx" if _ONNX_MODEL is not None else DETECTOR_BACKEND
-    log.info("Emotion-Analyse gestartet (Backend: %s). Druecke 'q' zum Beenden.", backend_name)
+    log.info(
+        "Emotion-Analyse gestartet (Backend: %s). Druecke 'q' zum Beenden.",
+        backend_name,
+    )
 
     # --- Audio-Analyse (optional) ---
     audio_analyzer = None
@@ -1265,6 +1655,7 @@ def main():
     if use_audio:
         try:
             from analyzers.audio_analyzer import AudioEmotionAnalyzer
+
             audio_analyzer = AudioEmotionAnalyzer()
             audio_analyzer.start()
             log.info("Audio-Emotionserkennung gestartet.")
@@ -1285,6 +1676,7 @@ def main():
     if use_pose:
         try:
             from analyzers.pose_analyzer import PoseEmotionAnalyzer
+
             pose_analyzer = PoseEmotionAnalyzer()
             pose_analyzer.start()
             log.info("Pose-Analyse gestartet.")
@@ -1305,6 +1697,7 @@ def main():
     if use_face_mesh:
         try:
             from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
+
             face_mesh_analyzer = FaceMeshAnalyzer()
             face_mesh_analyzer.start()
             log.info("Face-Mesh-Analyse gestartet (AUs + Kopfpose).")
@@ -1325,12 +1718,15 @@ def main():
     if use_hrv:
         try:
             from analyzers.hrv_analyzer import HRVAnalyzer
+
             hrv_analyzer = HRVAnalyzer(
                 window_seconds=HRV_WINDOW_SECONDS,
                 target_fps=TARGET_FPS,
             )
             hrv_analyzer.start()
-            log.info("HRV-Analyse (rPPG) gestartet (Fenster: %.0fs).", HRV_WINDOW_SECONDS)
+            log.info(
+                "HRV-Analyse (rPPG) gestartet (Fenster: %.0fs).", HRV_WINDOW_SECONDS
+            )
         except Exception as exc:
             ERR_TELEMETRY.record(
                 component="startup",
@@ -1347,7 +1743,8 @@ def main():
     use_breathing = USE_BREATHING and not args.no_breathing
     if use_breathing:
         try:
-            from breathing_analyzer import BreathingAnalyzer
+            from analyzers.breathing_analyzer import BreathingAnalyzer
+
             breathing_analyzer = BreathingAnalyzer(
                 window_seconds=BREATHING_WINDOW_SECONDS,
                 target_fps=TARGET_FPS / BREATHING_FRAME_INTERVAL,
@@ -1368,6 +1765,27 @@ def main():
                 cooldown_s=0.0,
             )
             breathing_analyzer = None
+
+    # --- Tastatur/Maus-Aktivitaets-Monitoring (optional) ---
+    activity_analyzer = None
+    use_activity = USE_ACTIVITY_MONITOR and not args.no_activity
+    if use_activity:
+        try:
+            from analyzers.activity_analyzer import ActivityAnalyzer
+
+            activity_analyzer = ActivityAnalyzer()
+            activity_analyzer.start()
+            log.info("Aktivitaets-Monitoring gestartet (Tastatur + Maus).")
+        except Exception as exc:
+            ERR_TELEMETRY.record(
+                component="startup",
+                code=ACTIVITY_ANALYZER_INIT_FAILED,
+                detail="Activity analyzer disabled",
+                exc=exc,
+                level=logging.WARNING,
+                cooldown_s=0.0,
+            )
+            activity_analyzer = None
 
     # --- Warm-up: DeepFace-Modell vorladen ---
     log.info("Emotion-Modell wird geladen (Warm-up)...")
@@ -1420,30 +1838,81 @@ def main():
     circadian_hue_pos = VA_HUE_POSITIVE
     circadian_bri_max = VA_BRI_HIGH
 
+    # --- Alexa-Controller (optional) ---
+    alexa_controller = None
+    use_alexa = USE_ALEXA and not args.mock and not getattr(args, "no_alexa", False)
+    if use_alexa:
+        if not ALEXA_EMAIL or not ALEXA_PASSWORD or not ALEXA_DEVICE_NAME:
+            log.warning(
+                "USE_ALEXA=True, aber ALEXA_EMAIL/ALEXA_PASSWORD/ALEXA_DEVICE_NAME "
+                "fehlen in config_local.py – Alexa-Steuerung deaktiviert."
+            )
+        else:
+            try:
+                from core.alexa_controller import AlexaController
+
+                alexa_controller = AlexaController(
+                    email=ALEXA_EMAIL,
+                    password=ALEXA_PASSWORD,
+                    device_name=ALEXA_DEVICE_NAME,
+                    amazon_url=ALEXA_AMAZON_URL,
+                    cooldown_seconds=ALEXA_COOLDOWN_SECONDS,
+                    music_provider=ALEXA_MUSIC_PROVIDER,
+                    mood_playlists=ALEXA_MOOD_PLAYLISTS,
+                    volume_control=ALEXA_VOLUME_CONTROL,
+                )
+                alexa_controller.start()
+                log.info(
+                    "Alexa-Controller gestartet (Geraet: '%s').", ALEXA_DEVICE_NAME
+                )
+            except Exception as exc:
+                log.warning("Alexa-Controller konnte nicht gestartet werden: %s", exc)
+                alexa_controller = None
+
     # Atemfuehrungs-Entrainment
-    pacer = BreathingPacer(
-        guide_bpm=BREATHING_PACER_BPM,
-        amplitude=BREATHING_PACER_AMPLITUDE,
-        fade_in_seconds=BREATHING_PACER_FADE_IN,
-    ) if USE_BREATHING_PACER else None
+    pacer = (
+        BreathingPacer(
+            guide_bpm=BREATHING_PACER_BPM,
+            amplitude=BREATHING_PACER_AMPLITUDE,
+            fade_in_seconds=BREATHING_PACER_FADE_IN,
+        )
+        if USE_BREATHING_PACER
+        else None
+    )
 
     # Vorausschauende Intervention: Trend-Zaehler
     trend_negative_counter = 0.0
     trend_last_time = time.time()
+    last_reg_info = {
+        "reg_v": ADAPTIVE_TARGET_VALENCE,
+        "reg_a": ADAPTIVE_TARGET_AROUSAL,
+        "current_v": ADAPTIVE_TARGET_VALENCE,
+        "current_a": ADAPTIVE_TARGET_AROUSAL,
+        "target_v": ADAPTIVE_TARGET_VALENCE,
+        "target_a": ADAPTIVE_TARGET_AROUSAL,
+        "blend": 0.0,
+        "label": "Tracking...",
+        "at_target": True,
+    }
 
     condition = args.condition or ("adaptive" if ADAPTIVE_REGULATION else "control")
     session_start_ts = time.time()
     last_session_log_ts = 0.0
     session_log_salt = os.environ.get("SESSION_LOG_SALT", "smart-light-default-salt")
     if args.session_log:
-        log.info("Session-Logging aktiv: %s (condition=%s)", args.session_log, condition)
+        log.info(
+            "Session-Logging aktiv: %s (condition=%s)", args.session_log, condition
+        )
         if args.pseudonymize_session and session_log_salt == "smart-light-default-salt":
             log.warning("SESSION_LOG_SALT nicht gesetzt - Default-Salt wird verwendet.")
 
     try:
         while True:
             if args.mock:
-                ret, frame = True, np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), dtype=np.uint8)
+                ret, frame = (
+                    True,
+                    np.zeros((FRAME_HEIGHT, FRAME_WIDTH, 3), dtype=np.uint8),
+                )
                 time.sleep(1 / 10)
             else:
                 ret, frame = cap.read()
@@ -1462,42 +1931,84 @@ def main():
                 fps_timer = now_fps
 
             # Adaptive Analysefrequenz: bei FPS-Einbruch drosseln, bei Reserve wieder erhoehen.
-            startup_ready = (now_fps - runtime_started_at) >= STARTUP_GUARD_DELAY_SECONDS
-            if startup_ready and ADAPTIVE_ANALYSIS and now_fps >= adapt_cooldown_until and fps_display > 0:
-                if fps_display < ADAPTIVE_FPS_LOW and analysis_every_n < MAX_ANALYSIS_EVERY_N_FRAMES:
+            startup_ready = (
+                now_fps - runtime_started_at
+            ) >= STARTUP_GUARD_DELAY_SECONDS
+            if (
+                startup_ready
+                and ADAPTIVE_ANALYSIS
+                and now_fps >= adapt_cooldown_until
+                and fps_display > 0
+            ):
+                if (
+                    fps_display < ADAPTIVE_FPS_LOW
+                    and analysis_every_n < MAX_ANALYSIS_EVERY_N_FRAMES
+                ):
                     analysis_every_n += 1
                     adapt_cooldown_until = now_fps + 0.8
-                    log.info("Adaptive Analyse: 1/%d (FPS %.1f)", analysis_every_n, fps_display)
-                elif fps_display > ADAPTIVE_FPS_HIGH and analysis_every_n > MIN_ANALYSIS_EVERY_N_FRAMES:
+                    log.info(
+                        "Adaptive Analyse: 1/%d (FPS %.1f)",
+                        analysis_every_n,
+                        fps_display,
+                    )
+                elif (
+                    fps_display > ADAPTIVE_FPS_HIGH
+                    and analysis_every_n > MIN_ANALYSIS_EVERY_N_FRAMES
+                ):
                     analysis_every_n -= 1
                     adapt_cooldown_until = now_fps + 1.2
-                    log.info("Adaptive Analyse: 1/%d (FPS %.1f)", analysis_every_n, fps_display)
+                    log.info(
+                        "Adaptive Analyse: 1/%d (FPS %.1f)",
+                        analysis_every_n,
+                        fps_display,
+                    )
 
             # Harte Untergrenze: unter MIN_RUNTIME_FPS optionale Analyse-Last abwerfen.
             if startup_ready and fps_display > 0:
                 if not low_fps_guard and fps_display < MIN_RUNTIME_FPS:
                     low_fps_guard = True
-                    analysis_every_n = min(MAX_ANALYSIS_EVERY_N_FRAMES, analysis_every_n + 2)
-                    log.warning("FPS-GUARD aktiv (%.1f FPS): optionale Analyse wird gedrosselt", fps_display)
-                elif low_fps_guard and fps_display >= (MIN_RUNTIME_FPS + LOW_FPS_RECOVERY_HYSTERESIS):
+                    analysis_every_n = min(
+                        MAX_ANALYSIS_EVERY_N_FRAMES, analysis_every_n + 2
+                    )
+                    log.warning(
+                        "FPS-GUARD aktiv (%.1f FPS): optionale Analyse wird gedrosselt",
+                        fps_display,
+                    )
+                elif low_fps_guard and fps_display >= (
+                    MIN_RUNTIME_FPS + LOW_FPS_RECOVERY_HYSTERESIS
+                ):
                     low_fps_guard = False
                     log.info("FPS-GUARD deaktiviert (%.1f FPS)", fps_display)
 
             # Burst nur mit FPS-Reserve erlauben, sonst kann schnelle Bewegung FPS stark einbrechen lassen.
-            burst_allowed = ((not ADAPTIVE_ANALYSIS) or (fps_display <= 0) or (fps_display >= ADAPTIVE_FPS_LOW)) and not low_fps_guard
+            burst_allowed = (
+                (not ADAPTIVE_ANALYSIS)
+                or (fps_display <= 0)
+                or (fps_display >= ADAPTIVE_FPS_LOW)
+            ) and not low_fps_guard
 
             # Frame an Analyzer senden (normal oder Burst)
-            if (analyzer.burst_active and burst_allowed) or frame_count % analysis_every_n == 0:
+            if (
+                analyzer.burst_active and burst_allowed
+            ) or frame_count % analysis_every_n == 0:
                 analyzer_frame = _resize_for_width(frame, ANALYSIS_FRAME_SIZE)
                 analyzer.submit(analyzer_frame.copy())
 
             # Pose-Analyse: Frame senden (halbe Rate)
-            if pose_analyzer is not None and not low_fps_guard and frame_count % (analysis_every_n * 2) == 0:
+            if (
+                pose_analyzer is not None
+                and not low_fps_guard
+                and frame_count % (analysis_every_n * 2) == 0
+            ):
                 pose_frame = _resize_for_width(frame, POSE_FRAME_SIZE)
                 pose_analyzer.submit(pose_frame.copy())
 
             # Face-Mesh-Analyse: Frame senden (gleiche Rate wie Hauptanalyse)
-            if face_mesh_analyzer is not None and not low_fps_guard and frame_count % analysis_every_n == 0:
+            if (
+                face_mesh_analyzer is not None
+                and not low_fps_guard
+                and frame_count % analysis_every_n == 0
+            ):
                 fm_frame = _resize_for_width(frame, FACE_MESH_FRAME_SIZE)
                 face_mesh_analyzer.submit(fm_frame.copy())
 
@@ -1506,7 +2017,10 @@ def main():
                 hrv_analyzer.submit(frame.copy())
 
             # Atemfrequenz: Frame senden (eigenes festes Intervall)
-            if breathing_analyzer is not None and frame_count % BREATHING_FRAME_INTERVAL == 0:
+            if (
+                breathing_analyzer is not None
+                and frame_count % BREATHING_FRAME_INTERVAL == 0
+            ):
                 breath_frame = _resize_for_width(frame, POSE_FRAME_SIZE)
                 breathing_analyzer.submit(breath_frame.copy())
 
@@ -1541,17 +2055,36 @@ def main():
 
             # Pose-Arousal-Offset abrufen
             pose_arousal_offset = 0.0
+            torso_lean = 0.0
+            shoulder_drop = 0.0
+            head_tilt = 0.0
             if pose_analyzer is not None:
                 pose_result = pose_analyzer.get()
                 pose_arousal_offset = pose_result.get("arousal_offset", 0.0)
+                if USE_EXTENDED_POSE and not args.no_extended_pose:
+                    torso_lean = pose_result.get("torso_lean", 0.0)
+                    shoulder_drop = pose_result.get("shoulder_drop", 0.0)
+                    head_tilt = pose_result.get("head_tilt", 0.0)
 
-            # Face-Mesh-Ergebnisse abrufen (AU-Scores + Kopfpose-Confidence)
+            # Face-Mesh-Ergebnisse abrufen (AU-Scores + Kopfpose-Confidence + Pupille/Blink)
             face_mesh_scores = None
             head_pose_conf_factor = 1.0
+            pupil_dilation = 0.0
+            blink_rate = 0.0
             if face_mesh_analyzer is not None:
                 fm_result = face_mesh_analyzer.get()
                 face_mesh_scores = fm_result.get("au_emotion_scores")
                 head_pose_conf_factor = fm_result.get("confidence_factor", 1.0)
+                if USE_PUPIL_BLINK and not args.no_pupil_blink:
+                    pupil_dilation = fm_result.get("pupil_dilation", 0.0)
+                    blink_rate = fm_result.get("blink_rate", 0.0)
+
+            # Aktivitaets-Ergebnis abrufen (Tastatur/Maus)
+            activity_result = None
+            cognitive_load = 0.0
+            if activity_analyzer is not None:
+                activity_result = activity_analyzer.get()
+                cognitive_load = activity_result.get("cognitive_load", 0.0)
 
             # HRV-Ergebnis abrufen + optionalen Arousal-Offset berechnen
             hrv_result = None
@@ -1561,7 +2094,11 @@ def main():
                 hr_bpm = hrv_result.get("hr_bpm", 0.0)
                 hrv_conf = hrv_result.get("confidence", 0.0)
                 raw_hrv_offset = 0.0
-                if hr_bpm > 0 and hrv_conf >= HRV_MIN_CONFIDENCE and HRV_AROUSAL_INFLUENCE > 0:
+                if (
+                    hr_bpm > 0
+                    and hrv_conf >= HRV_MIN_CONFIDENCE
+                    and HRV_AROUSAL_INFLUENCE > 0
+                ):
                     if HRV_BASELINE_ADAPT_ALPHA > 0:
                         a_hr = max(0.0, min(1.0, HRV_BASELINE_ADAPT_ALPHA))
                         hrv_rest_bpm = (1.0 - a_hr) * hrv_rest_bpm + a_hr * hr_bpm
@@ -1570,11 +2107,15 @@ def main():
                     raw_hrv_offset = (
                         (hr_bpm - hrv_rest_bpm) / max(40.0, hrv_rest_bpm)
                     ) * HRV_AROUSAL_INFLUENCE
-                    raw_hrv_offset = max(-HRV_OFFSET_CLAMP, min(HRV_OFFSET_CLAMP, raw_hrv_offset))
+                    raw_hrv_offset = max(
+                        -HRV_OFFSET_CLAMP, min(HRV_OFFSET_CLAMP, raw_hrv_offset)
+                    )
 
                 # HRV-Offset zeitlich glaetten; bei fehlender Messung sanft gegen 0.
                 a_h = max(0.0, min(1.0, HRV_OFFSET_EMA_ALPHA))
-                hrv_arousal_offset_ema = (1.0 - a_h) * hrv_arousal_offset_ema + a_h * raw_hrv_offset
+                hrv_arousal_offset_ema = (
+                    1.0 - a_h
+                ) * hrv_arousal_offset_ema + a_h * raw_hrv_offset
                 hrv_arousal_offset = hrv_arousal_offset_ema
 
             # Atemfrequenz-Ergebnis abrufen + optionalen Arousal-Offset berechnen
@@ -1585,12 +2126,20 @@ def main():
                 br_bpm = breathing_result.get("br_bpm", 0.0)
                 br_conf = breathing_result.get("confidence", 0.0)
                 raw_breathing_offset = 0.0
-                if br_bpm > 0 and br_conf >= BREATHING_MIN_CONFIDENCE and BREATHING_AROUSAL_INFLUENCE > 0:
+                if (
+                    br_bpm > 0
+                    and br_conf >= BREATHING_MIN_CONFIDENCE
+                    and BREATHING_AROUSAL_INFLUENCE > 0
+                ):
                     # 1) Erste Sekunden: persoenliche Ruhe-Baseline aus stabilen Messungen lernen.
-                    if (time.time() - breathing_baseline_start) <= BREATHING_BASELINE_SECONDS:
+                    if (
+                        time.time() - breathing_baseline_start
+                    ) <= BREATHING_BASELINE_SECONDS:
                         breathing_baseline_samples.append(br_bpm)
                         if len(breathing_baseline_samples) >= 3:
-                            breathing_rest_bpm = float(np.median(np.array(breathing_baseline_samples)))
+                            breathing_rest_bpm = float(
+                                np.median(np.array(breathing_baseline_samples))
+                            )
                     # 2) Danach Baseline langsam weiterfuehren, um Tagesform abzubilden.
                     elif BREATHING_BASELINE_ADAPT_ALPHA > 0:
                         a = BREATHING_BASELINE_ADAPT_ALPHA
@@ -1607,7 +2156,9 @@ def main():
                 # 3) Atem-Offset per EMA glaetten; bei ungueltiger Messung sanft gegen 0 abklingen.
                 target_offset = raw_breathing_offset
                 a_off = BREATHING_OFFSET_EMA_ALPHA
-                breathing_arousal_offset_ema = (1.0 - a_off) * breathing_arousal_offset_ema + a_off * target_offset
+                breathing_arousal_offset_ema = (
+                    1.0 - a_off
+                ) * breathing_arousal_offset_ema + a_off * target_offset
                 breathing_arousal_offset = breathing_arousal_offset_ema
 
             # Kopfpose-Kompensation: optional und gedaempft anwenden,
@@ -1616,7 +2167,9 @@ def main():
             pose_enabled = USE_HEAD_POSE_CONFIDENCE and not args.no_head_pose_penalty
             pose_scale = 1.0
             if pose_enabled:
-                pose_scale = (1.0 - pose_strength) + (pose_strength * head_pose_conf_factor)
+                pose_scale = (1.0 - pose_strength) + (
+                    pose_strength * head_pose_conf_factor
+                )
             effective_confidence = confidence * pose_scale
 
             # Multimodal-Fusion
@@ -1625,7 +2178,10 @@ def main():
             fused_a = 0.0
 
             # Zirkadianes Licht-Modell: Zielwerte + Hue-Bereiche periodisch aktualisieren
-            if circadian is not None and (time.time() - last_circadian_update) >= CIRCADIAN_UPDATE_INTERVAL:
+            if (
+                circadian is not None
+                and (time.time() - last_circadian_update) >= CIRCADIAN_UPDATE_INTERVAL
+            ):
                 cp = circadian.get_params()
                 regulator.set_target(cp["target_v"], cp["target_a"])
                 circadian_hue_neg = cp["hue_negative"]
@@ -1633,16 +2189,25 @@ def main():
                 circadian_bri_max = cp["bri_max"]
                 circadian_label = cp["label"]
                 last_circadian_update = time.time()
-                log.info("Zirkadian-Update: %s (V=%.2f A=%.2f)", circadian_label, cp["target_v"], cp["target_a"])
+                log.info(
+                    "Zirkadian-Update: %s (V=%.2f A=%.2f)",
+                    circadian_label,
+                    cp["target_v"],
+                    cp["target_a"],
+                )
 
             if ema_vector and effective_confidence > 0.0:
                 dynamic_face_mesh_weight = 0.0
                 if face_mesh_scores:
                     # Face-Mesh nur stark einmischen, wenn die Pose-/Landmark-Qualitaet stabil ist.
-                    dynamic_face_mesh_weight = FACE_MESH_WEIGHT * max(0.0, min(1.0, head_pose_conf_factor))
+                    dynamic_face_mesh_weight = FACE_MESH_WEIGHT * max(
+                        0.0, min(1.0, head_pose_conf_factor)
+                    )
 
                 fused_ema = fuse_modalities(
-                    ema_vector, audio_ema, pose_arousal_offset,
+                    ema_vector,
+                    audio_ema,
+                    pose_arousal_offset,
                     dynamic_audio_weight if audio_ema else 0.0,
                     face_mesh_scores=face_mesh_scores,
                     face_mesh_weight=dynamic_face_mesh_weight,
@@ -1656,11 +2221,18 @@ def main():
                 if trend_v < PREDICTIVE_TREND_THRESHOLD:
                     trend_negative_counter += dt_trend
                 else:
-                    trend_negative_counter = max(0.0, trend_negative_counter - dt_trend * 2)
+                    trend_negative_counter = max(
+                        0.0, trend_negative_counter - dt_trend * 2
+                    )
                 if trend_negative_counter >= PREDICTIVE_TRIGGER_SECONDS:
-                    regulator.boost_blend(factor=PREDICTIVE_BOOST_FACTOR, duration_s=PREDICTIVE_BOOST_DURATION)
+                    regulator.boost_blend(
+                        factor=PREDICTIVE_BOOST_FACTOR,
+                        duration_s=PREDICTIVE_BOOST_DURATION,
+                    )
                     trend_negative_counter = 0.0
-                    log.info("Predictive Intervention: Abwaertstrend erkannt, Blend verstaerkt")
+                    log.info(
+                        "Predictive Intervention: Abwaertstrend erkannt, Blend verstaerkt"
+                    )
 
                 # Adaptive Regulation: Licht nudgt Richtung Zielzustand statt Ist-Zustand zu spiegeln
                 if ADAPTIVE_REGULATION and USE_VALENCE_AROUSAL:
@@ -1669,8 +2241,11 @@ def main():
                     reg_v, reg_a = reg_info["reg_v"], reg_info["reg_a"]
                     if circadian is not None:
                         params = _circadian_va_to_light(
-                            reg_v, reg_a,
-                            circadian_hue_neg, circadian_hue_pos, circadian_bri_max,
+                            reg_v,
+                            reg_a,
+                            circadian_hue_neg,
+                            circadian_hue_pos,
+                            circadian_bri_max,
                         )
                     else:
                         params = valence_arousal_to_light(reg_v, reg_a)
@@ -1678,7 +2253,9 @@ def main():
                     params = blend_emotion_colors(fused_ema)
                 # Pose-Arousal-Offset auf Helligkeit/Saettigung anwenden
                 if pose_arousal_offset != 0.0 and POSE_WEIGHT > 0:
-                    bri_adj = int(params["bri"] * (1.0 + pose_arousal_offset * POSE_WEIGHT))
+                    bri_adj = int(
+                        params["bri"] * (1.0 + pose_arousal_offset * POSE_WEIGHT)
+                    )
                     params["bri"] = max(1, min(254, bri_adj))
                 # HRV-Arousal-Offset anwenden: hohe HR → höhere Helligkeit/Sättigung
                 if hrv_arousal_offset != 0.0:
@@ -1688,15 +2265,124 @@ def main():
                 if breathing_arousal_offset != 0.0:
                     bri_adj = int(params["bri"] * (1.0 + breathing_arousal_offset))
                     params["bri"] = max(1, min(254, bri_adj))
-                    sat_adj = int(params["sat"] * (1.0 + breathing_arousal_offset * 0.5))
+                    sat_adj = int(
+                        params["sat"] * (1.0 + breathing_arousal_offset * 0.5)
+                    )
                     params["sat"] = max(0, min(254, sat_adj))
+
+                # Pupillen-Arousal-Offset: groessere Pupillen => hohes kognitives Arousal
+                if USE_PUPIL_BLINK and not args.no_pupil_blink and pupil_dilation > 0:
+                    pupil_offset = (
+                        (pupil_dilation - PUPIL_DILATION_BASELINE)
+                        / max(0.1, PUPIL_DILATION_BASELINE)
+                    ) * PUPIL_AROUSAL_INFLUENCE
+                    pupil_offset = max(
+                        -PUPIL_OFFSET_CLAMP, min(PUPIL_OFFSET_CLAMP, pupil_offset)
+                    )
+                    if pupil_offset != 0.0:
+                        bri_adj = int(params["bri"] * (1.0 + pupil_offset))
+                        params["bri"] = max(1, min(254, bri_adj))
+
+                # Blink-Rate beeinflusst Valence: hohe Blink-Rate = Muedigkeit → waermeres Licht
+                if USE_PUPIL_BLINK and not args.no_pupil_blink and blink_rate > 0:
+                    if blink_rate > BLINK_RATE_FATIGUE_THRESHOLD:
+                        # Muedigkeit: Hue Richtung warm schieben, Helligkeit senken
+                        fatigue_factor = min(
+                            1.0, (blink_rate - BLINK_RATE_FATIGUE_THRESHOLD) / 15.0
+                        )
+                        params["bri"] = max(
+                            1,
+                            int(
+                                params["bri"]
+                                * (1.0 - fatigue_factor * BLINK_VALENCE_INFLUENCE)
+                            ),
+                        )
+                    elif blink_rate < BLINK_RATE_FOCUS_THRESHOLD:
+                        # Fokus: leicht erhoehte Helligkeit
+                        focus_factor = min(
+                            1.0, (BLINK_RATE_FOCUS_THRESHOLD - blink_rate) / 8.0
+                        )
+                        params["bri"] = min(
+                            254,
+                            int(
+                                params["bri"]
+                                * (1.0 + focus_factor * BLINK_VALENCE_INFLUENCE)
+                            ),
+                        )
+
+                # Erweiterte Pose-Signale anwenden
+                if USE_EXTENDED_POSE and not args.no_extended_pose:
+                    # Vorneigung erhoeht Arousal (Engagement/Fokus)
+                    if torso_lean > 0 and TORSO_LEAN_AROUSAL_INFLUENCE > 0:
+                        lean_boost = torso_lean * TORSO_LEAN_AROUSAL_INFLUENCE
+                        params["bri"] = min(
+                            254, int(params["bri"] * (1.0 + lean_boost))
+                        )
+                    # Schulterabsenkung senkt Valence (Muedigkeit/Resignation)
+                    if shoulder_drop > 0 and SHOULDER_DROP_VALENCE_INFLUENCE > 0:
+                        drop_dim = shoulder_drop * SHOULDER_DROP_VALENCE_INFLUENCE
+                        params["sat"] = max(0, int(params["sat"] * (1.0 - drop_dim)))
+
+                # Aktivitaets-Offset: hohe kognitive Last → angepasstes Arousal
+                if (
+                    activity_analyzer is not None
+                    and cognitive_load > 0
+                    and ACTIVITY_AROUSAL_INFLUENCE > 0
+                ):
+                    # Kognitive Last erhoht die Helligkeit fuer Fokus-Unterstuetzung
+                    activity_boost = cognitive_load * ACTIVITY_AROUSAL_INFLUENCE
+                    params["bri"] = min(
+                        254, int(params["bri"] * (1.0 + activity_boost))
+                    )
+
+                # Prosodische Stimm-Offset: Tonhoehe und Sprechrate beeinflussen Arousal
+                if USE_PROSODIC and not args.no_prosodic and audio_analyzer is not None:
+                    audio_res = audio_analyzer.get()
+                    pitch_hz = audio_res.get("pitch_mean_hz", 0.0)
+                    speech_rate = audio_res.get("speech_rate", 0.0)
+                    if pitch_hz > 0 and PROSODIC_AROUSAL_INFLUENCE > 0:
+                        # Hohe Tonhoehe = Stress/Aufregung, niedrige = Ruhe
+                        mid_hz = (
+                            PROSODIC_PITCH_STRESS_HZ + PROSODIC_PITCH_CALM_HZ
+                        ) / 2.0
+                        range_hz = (
+                            PROSODIC_PITCH_STRESS_HZ - PROSODIC_PITCH_CALM_HZ
+                        ) / 2.0
+                        if range_hz > 0:
+                            pitch_offset = (
+                                (pitch_hz - mid_hz) / range_hz
+                            ) * PROSODIC_AROUSAL_INFLUENCE
+                            pitch_offset = max(-0.15, min(0.15, pitch_offset))
+                            params["bri"] = max(
+                                1, min(254, int(params["bri"] * (1.0 + pitch_offset)))
+                            )
+                    if speech_rate > 0 and PROSODIC_AROUSAL_INFLUENCE > 0:
+                        # Schnelles Sprechen = hoehere Energie, langsames = ruhiger
+                        mid_sr = (
+                            PROSODIC_SPEECH_RATE_HIGH + PROSODIC_SPEECH_RATE_LOW
+                        ) / 2.0
+                        range_sr = (
+                            PROSODIC_SPEECH_RATE_HIGH - PROSODIC_SPEECH_RATE_LOW
+                        ) / 2.0
+                        if range_sr > 0:
+                            sr_offset = (
+                                ((speech_rate - mid_sr) / range_sr)
+                                * PROSODIC_AROUSAL_INFLUENCE
+                                * 0.5
+                            )
+                            sr_offset = max(-0.1, min(0.1, sr_offset))
+                            params["sat"] = max(
+                                0, min(254, int(params["sat"] * (1.0 + sr_offset)))
+                            )
 
                 # Atemfuehrungs-Entrainment: Licht sanft pulsieren lassen
                 if pacer is not None:
                     br_active = (
                         breathing_result is not None
-                        and breathing_result.get("br_bpm", 0.0) > BREATHING_PACER_BR_THRESHOLD
-                        and breathing_result.get("confidence", 0.0) >= BREATHING_MIN_CONFIDENCE
+                        and breathing_result.get("br_bpm", 0.0)
+                        > BREATHING_PACER_BR_THRESHOLD
+                        and breathing_result.get("confidence", 0.0)
+                        >= BREATHING_MIN_CONFIDENCE
                         and (reg_info is None or not reg_info.get("at_target", False))
                     )
                     pacer.set_active(br_active)
@@ -1709,19 +2395,34 @@ def main():
             # Trend beeinflusst Transition-Zeit
             transition = TRANSITION_TIME
             if TREND_INFLUENCE > 0 and trend_v < -0.01:
-                transition = int(TRANSITION_TIME * (1.0 + TREND_INFLUENCE * abs(trend_v) * 10))
+                transition = int(
+                    TRANSITION_TIME * (1.0 + TREND_INFLUENCE * abs(trend_v) * 10)
+                )
                 transition = min(transition, 50)  # Max 5s
             if BREATHING_TRANSITION_INFLUENCE > 0 and breathing_arousal_offset != 0.0:
                 # Schnelles Atmen -> kuerzere Transition (reaktiver), langsames Atmen -> laengere (ruhiger).
-                factor = 1.0 - (breathing_arousal_offset * BREATHING_TRANSITION_INFLUENCE)
+                factor = 1.0 - (
+                    breathing_arousal_offset * BREATHING_TRANSITION_INFLUENCE
+                )
                 factor = max(0.6, min(1.8, factor))
                 transition = int(round(transition * factor))
                 transition = max(1, min(50, transition))
+            # Aktivitaet beeinflusst Transition: hohe Eingaberate → reaktiveres Licht
+            if (
+                activity_analyzer is not None
+                and cognitive_load > 0
+                and ACTIVITY_TRANSITION_INFLUENCE > 0
+            ):
+                act_factor = 1.0 - (cognitive_load * ACTIVITY_TRANSITION_INFLUENCE)
+                act_factor = max(0.6, min(1.0, act_factor))
+                transition = max(1, min(50, int(round(transition * act_factor))))
 
             # Unsicherheits-Guardrail: bei niedriger Modellqualitaet konservativer steuern.
             if ema_vector and quality < LOW_QUALITY_THRESHOLD:
                 low_quality_guardrail = True
-                params = _blend_light_params(params, FALLBACK_LIGHT, LOW_QUALITY_NEUTRAL_BLEND)
+                params = _blend_light_params(
+                    params, FALLBACK_LIGHT, LOW_QUALITY_NEUTRAL_BLEND
+                )
                 transition = max(transition, int(LOW_QUALITY_MIN_TRANSITION))
 
             # Abwesenheits-Check: Licht ausschalten wenn zu lange niemand im Bild
@@ -1737,7 +2438,7 @@ def main():
             else:
                 if lights_off_due_absence:
                     lights_off_due_absence = False
-                    for lid in (hue.lids if hasattr(hue, "lids") else []):
+                    for lid in hue.lids if hasattr(hue, "lids") else []:
                         try:
                             hue.bridge.set_light(lid, "on", True)
                         except Exception as exc:
@@ -1753,6 +2454,28 @@ def main():
 
             if not lights_off_due_absence:
                 hue.apply(params, transition=transition)
+
+            # Alexa: Musik/Lautstaerke emotion-adaptiv steuern
+            if (
+                alexa_controller is not None
+                and ema_vector
+                and effective_confidence > 0.0
+            ):
+                alexa_controller.update(fused_v, fused_a, emotion)
+
+            reg_info_display = reg_info
+            if reg_info is not None:
+                last_reg_info = dict(reg_info)
+            elif ADAPTIVE_REGULATION and USE_VALENCE_AROUSAL:
+                # Kein frisches Regulator-Update in diesem Frame: letzte Ziel-Infos halten,
+                # damit das VA-Diagramm stabil sichtbar bleibt.
+                reg_info_display = dict(last_reg_info)
+                reg_info_display["current_v"] = float(fused_v)
+                reg_info_display["current_a"] = float(fused_a)
+                dv = reg_info_display["target_v"] - reg_info_display["current_v"]
+                da = reg_info_display["target_a"] - reg_info_display["current_a"]
+                dist = float(np.sqrt(dv * dv + da * da))
+                reg_info_display["at_target"] = dist < ADAPTIVE_AT_TARGET_THRESHOLD
 
             _draw_overlay(
                 frame=frame,
@@ -1781,35 +2504,59 @@ def main():
                 breathing_result=breathing_result,
                 breathing_rest_bpm=breathing_rest_bpm,
                 breathing_offset=breathing_arousal_offset,
-                reg_info=reg_info,
+                reg_info=reg_info_display,
                 circadian_label=circadian_label,
                 pacer_info={
                     "active": pacer is not None and pacer.is_active,
                     "fade_pct": pacer.get_fade_pct() if pacer is not None else 0.0,
-                } if pacer is not None else None,
+                }
+                if pacer is not None
+                else None,
+                pupil_dilation=pupil_dilation,
+                blink_rate=blink_rate,
+                activity_result=activity_result,
+                torso_lean=torso_lean,
+                shoulder_drop=shoulder_drop,
+                head_tilt=head_tilt,
             )
 
             if args.session_log and (time.time() - last_session_log_ts) >= 1.0:
-                target_v = reg_info["target_v"] if reg_info is not None else ADAPTIVE_TARGET_VALENCE
-                target_a = reg_info["target_a"] if reg_info is not None else ADAPTIVE_TARGET_AROUSAL
+                target_v = (
+                    reg_info["target_v"]
+                    if reg_info is not None
+                    else ADAPTIVE_TARGET_VALENCE
+                )
+                target_a = (
+                    reg_info["target_a"]
+                    if reg_info is not None
+                    else ADAPTIVE_TARGET_AROUSAL
+                )
                 output_v = reg_info["reg_v"] if reg_info is not None else fused_v
                 output_a = reg_info["reg_a"] if reg_info is not None else fused_a
-                current_dist = float(np.sqrt((target_v - fused_v) ** 2 + (target_a - fused_a) ** 2))
-                output_dist = float(np.sqrt((target_v - output_v) ** 2 + (target_a - output_a) ** 2))
+                current_dist = float(
+                    np.sqrt((target_v - fused_v) ** 2 + (target_a - fused_a) ** 2)
+                )
+                output_dist = float(
+                    np.sqrt((target_v - output_v) ** 2 + (target_a - output_a) ** 2)
+                )
 
                 payload = {
                     "timestamp": time.time(),
                     "runtime_sec": time.time() - session_start_ts,
                     "participant": (
                         _pseudonymize_identity(args.participant, session_log_salt)
-                        if args.pseudonymize_session else args.participant
+                        if args.pseudonymize_session
+                        else args.participant
                     ),
                     "session_id": (
                         _pseudonymize_identity(args.session_id, session_log_salt)
-                        if args.pseudonymize_session else args.session_id
+                        if args.pseudonymize_session
+                        else args.session_id
                     ),
                     "condition": condition,
-                    "adaptive_enabled": bool(ADAPTIVE_REGULATION and USE_VALENCE_AROUSAL),
+                    "adaptive_enabled": bool(
+                        ADAPTIVE_REGULATION and USE_VALENCE_AROUSAL
+                    ),
                     "emotion": emotion,
                     "confidence": float(confidence),
                     "audio_confidence": float(audio_confidence),
@@ -1826,8 +2573,16 @@ def main():
                     "distance_current": current_dist,
                     "distance_output": output_dist,
                     "blend": float(reg_info["blend"]) if reg_info is not None else 0.0,
-                    "at_target": bool(reg_info["at_target"]) if reg_info is not None else False,
+                    "at_target": bool(reg_info["at_target"])
+                    if reg_info is not None
+                    else False,
                     "label": reg_info["label"] if reg_info is not None else "n/a",
+                    "pupil_dilation": float(pupil_dilation),
+                    "blink_rate": float(blink_rate),
+                    "cognitive_load": float(cognitive_load),
+                    "torso_lean": float(torso_lean),
+                    "shoulder_drop": float(shoulder_drop),
+                    "head_tilt": float(head_tilt),
                 }
                 _append_session_log(args.session_log, payload)
                 last_session_log_ts = time.time()
@@ -1855,6 +2610,10 @@ def main():
             hrv_analyzer.stop()
         if breathing_analyzer is not None:
             breathing_analyzer.stop()
+        if activity_analyzer is not None:
+            activity_analyzer.stop()
+        if alexa_controller is not None:
+            alexa_controller.shutdown()
         hue.apply(FALLBACK_LIGHT, transition=10)
         hue.shutdown()
         if ERR_TELEMETRY.summary():

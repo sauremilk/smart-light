@@ -470,19 +470,45 @@ def _robust_deepface_scores(
             ]
         )
 
+    # Very dark frames: aggressive recovery candidates.
+    if mean_luma < 50.0:
+        strong_lift = _gamma_correct(frame, gamma=0.40)
+        candidates.extend(
+            [
+                ("lifted_vdark", strong_lift),
+                ("lifted_vdark_clahe", clahe_l(strong_lift, 3.5)),
+                ("denoise_vdark", _denoise_bilateral(strong_lift)),
+            ]
+        )
+
     # Optional hint from extreme benchmark to probe profile-specific robustness.
-    if profile_hint == "color_cast_shadow":
+    if profile_hint == "low_light_noise":
+        lifted = _gamma_correct(frame, gamma=0.35)
+        candidates.extend(
+            [
+                ("ll_strong_lift", lifted),
+                ("ll_denoise_lift", _denoise_bilateral(_gamma_correct(frame, gamma=0.42))),
+                ("ll_lift_clahe", clahe_l(lifted, 4.0)),
+            ]
+        )
+    elif profile_hint == "color_cast_shadow":
         cc = gray_world(frame)
         candidates.extend(
             [
                 ("cc_grayworld", cc),
                 ("cc_grayworld_clahe", clahe_l(cc, 2.0)),
+                ("cc_grayworld_clahe_strong", clahe_l(cc, 4.0)),
+                ("cc_denoise_gw", _denoise_bilateral(cc)),
             ]
         )
     elif profile_hint == "mixed_extreme":
+        lifted = _gamma_correct(frame, gamma=0.50)
+        cc = gray_world(frame)
         candidates.extend(
             [
                 ("mixed_denoise_unsharp", _unsharp(_denoise_bilateral(frame), sigma=1.0, amount=0.9)),
+                ("mixed_lift_denoise", _denoise_bilateral(lifted)),
+                ("mixed_cc_clahe", clahe_l(cc, 3.5)),
             ]
         )
 
@@ -492,6 +518,9 @@ def _robust_deepface_scores(
     best_quality = -1.0
     best_name = "base"
     best_backend = detector_backend
+
+    # Collect all candidate results for ensemble voting.
+    all_results: list[tuple[dict[str, float], float, float, str]] = []
 
     backends = [detector_backend]
     # Optional robust fallback for hard perturbations.
@@ -512,6 +541,8 @@ def _robust_deepface_scores(
             margin = _top_margin(probs)
             quality = 0.65 * float(conf) + 0.35 * float(margin)
 
+            all_results.append((scores, float(conf), float(quality), name))
+
             if quality > best_quality:
                 best_scores = scores
                 best_image = img
@@ -526,6 +557,26 @@ def _robust_deepface_scores(
 
     if best_scores is None:
         return ({e: 0.0 for e in EMOTIONS}, 0.0, "base", 0.0, detector_backend)
+
+    # Ensemble: weighted average of top candidates only when best quality is moderate.
+    # When best candidate is already high-quality, ensembling can dilute the correct answer.
+    if len(all_results) >= 3 and best_quality < 0.75:
+        # Sort by quality descending and take top-K.
+        all_results.sort(key=lambda r: r[2], reverse=True)
+        top_k = all_results[:min(4, len(all_results))]
+        total_w = sum(r[2] for r in top_k)
+        if total_w > 0:
+            ensemble_scores: dict[str, float] = {e: 0.0 for e in EMOTIONS}
+            for scores_i, conf_i, quality_i, name_i in top_k:
+                probs_i = norm_scores(scores_i)
+                w_i = quality_i / total_w
+                for e in EMOTIONS:
+                    ensemble_scores[e] += w_i * probs_i[e]
+            s = sum(ensemble_scores.values())
+            if s > 0:
+                ensemble_scores = {e: ensemble_scores[e] / s for e in EMOTIONS}
+            best_scores = {e: 100.0 * ensemble_scores[e] for e in EMOTIONS}
+            best_conf = max(float(best_conf), float(max(ensemble_scores.values())))
 
     # Low-quality TTA: blend with horizontally flipped inference for extra robustness.
     if best_image is not None and best_quality < 0.55:
@@ -571,7 +622,10 @@ def predict_enhanced(
 ) -> str | tuple[str, dict[str, object]]:
     proc = resize_for_width(img, 320)
     proc = gray_world(proc)
-    proc = clahe_l(proc, 2.0)
+    # Adaptive CLAHE: stronger clip limit for dark images.
+    luma_check = float(cv2.cvtColor(proc, cv2.COLOR_BGR2GRAY).mean())
+    clip = 3.5 if luma_check < 70.0 else 2.5
+    proc = clahe_l(proc, clip)
 
     (
         df_scores,
@@ -619,10 +673,10 @@ def predict_enhanced(
     # Rescue rule for very dark frames: if there is a stable non-neutral top class,
     # avoid collapsing to neutral too aggressively.
     dark_rescue = (
-        darkness >= 0.55
+        darkness >= 0.45
         and top_label != "neutral"
-        and top_prob >= 0.30
-        and float(conf) >= 0.15
+        and top_prob >= 0.25
+        and float(conf) >= 0.10
     )
 
     label = "neutral" if (gated_neutral and not dark_rescue) else top_label

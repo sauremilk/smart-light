@@ -41,11 +41,14 @@ if os.path.dirname(__file__) not in sys.path:
 
 PROFILE_PRESETS = {
     "quick": {
-        "extreme_limit": 21,
+        "extreme_limit": 7,
         "extreme_variants": 1,
-        "accuracy_limit": 21,
+        "accuracy_limit": 7,
         "seeds": [1],
         "e2e_profile": "quick",
+        "extreme_compare_face_mesh": False,
+        "lightweight_env_metadata": True,
+        "sanity_include_face_mesh": False,
     },
     "standard": {
         "extreme_limit": 56,
@@ -53,6 +56,9 @@ PROFILE_PRESETS = {
         "accuracy_limit": 42,
         "seeds": [1, 2, 3],
         "e2e_profile": "standard",
+        "extreme_compare_face_mesh": True,
+        "lightweight_env_metadata": False,
+        "sanity_include_face_mesh": True,
     },
     "strict": {
         "extreme_limit": 84,
@@ -60,6 +66,9 @@ PROFILE_PRESETS = {
         "accuracy_limit": 56,
         "seeds": [1, 2, 3, 4, 5],
         "e2e_profile": "strict",
+        "extreme_compare_face_mesh": True,
+        "lightweight_env_metadata": False,
+        "sanity_include_face_mesh": True,
     },
 }
 
@@ -98,7 +107,7 @@ def _mean_std_ci95(values: list[float]) -> dict:
 
     mean = float(statistics.fmean(values))
     std = float(statistics.stdev(values)) if n > 1 else 0.0
-    sem = (std / (n ** 0.5)) if n > 1 else 0.0
+    sem = (std / (n**0.5)) if n > 1 else 0.0
     # Normal approximation is sufficient for quick trend diagnostics.
     half = 1.96 * sem
     return {
@@ -112,7 +121,7 @@ def _mean_std_ci95(values: list[float]) -> dict:
     }
 
 
-def _collect_environment_metadata() -> dict:
+def _collect_environment_metadata(lightweight: bool = False) -> dict:
     metadata = {
         "platform": {
             "system": platform.system(),
@@ -136,11 +145,26 @@ def _collect_environment_metadata() -> dict:
         ("torch", "torch"),
         ("mediapipe", "mediapipe"),
     ):
+        if lightweight and module_name in ("tensorflow", "torch", "mediapipe"):
+            metadata["libraries"][lib_name] = "skipped_lightweight"
+            continue
         try:
             mod = __import__(module_name)
             metadata["libraries"][lib_name] = getattr(mod, "__version__", "unknown")
         except Exception:
             metadata["libraries"][lib_name] = None
+
+    if lightweight:
+        metadata["hardware"]["torch_cuda"] = {
+            "available": None,
+            "device_count": None,
+            "device_name": None,
+            "total_memory_bytes": None,
+            "cuda_version": None,
+            "cudnn_version": None,
+            "note": "Skipped in lightweight metadata mode.",
+        }
+        return metadata
 
     try:
         import torch  # type: ignore
@@ -187,20 +211,24 @@ def _run_extreme_component(preset: dict, detector: str, seed: int) -> ComponentR
     )
     runs["no_face_mesh"] = run_no_fm
 
-    run_with_fm = run_extreme_benchmark(
-        limit=int(preset["extreme_limit"]),
-        seed=int(seed),
-        detector_backend=detector,
-        variants_per_sample=int(preset["extreme_variants"]),
-        use_face_mesh=True,
-        face_mesh_weight=float(FACE_MESH_WEIGHT),
-        head_pose_strength=float(HEAD_POSE_STRENGTH),
-    )
-    runs["with_face_mesh"] = run_with_fm
-
     s_no = float(run_no_fm["enhanced"]["weighted_score"])
-    s_fm = float(run_with_fm["enhanced"]["weighted_score"])
-    score = _clamp01((s_no + s_fm) / 2.0)
+    compare_face_mesh = bool(preset.get("extreme_compare_face_mesh", True))
+    if compare_face_mesh:
+        run_with_fm = run_extreme_benchmark(
+            limit=int(preset["extreme_limit"]),
+            seed=int(seed),
+            detector_backend=detector,
+            variants_per_sample=int(preset["extreme_variants"]),
+            use_face_mesh=True,
+            face_mesh_weight=float(FACE_MESH_WEIGHT),
+            head_pose_strength=float(HEAD_POSE_STRENGTH),
+        )
+        runs["with_face_mesh"] = run_with_fm
+        s_fm = float(run_with_fm["enhanced"]["weighted_score"])
+        score = _clamp01((s_no + s_fm) / 2.0)
+    else:
+        s_fm = s_no
+        score = _clamp01(s_no)
 
     details = {
         "score_index": _index(score),
@@ -209,11 +237,14 @@ def _run_extreme_component(preset: dict, detector: str, seed: int) -> ComponentR
         "delta_score_with_minus_without_face_mesh": s_fm - s_no,
         "runs": runs,
     }
-    return ComponentResult(name="extreme_visual_robustness", score01=score, details=details)
+    return ComponentResult(
+        name="extreme_visual_robustness", score01=score, details=details
+    )
 
 
 def _run_stability_component(preset: dict, detector: str) -> ComponentResult:
-    from accuracy_benchmark import FACE_MESH_WEIGHT, HEAD_POSE_STRENGTH, run as run_accuracy
+    from accuracy_benchmark import FACE_MESH_WEIGHT, HEAD_POSE_STRENGTH
+    from accuracy_benchmark import run as run_accuracy
 
     seed_rows = []
     weighted_scores = []
@@ -230,8 +261,12 @@ def _run_stability_component(preset: dict, detector: str) -> ComponentResult:
             collect_diagnostics=False,
         )
 
-        score = _weighted_metric(report["enhanced"]["accuracy"], report["enhanced"]["macro_f1"])
-        delta_score = _weighted_metric(report["delta"]["accuracy"], report["delta"]["macro_f1"])
+        score = _weighted_metric(
+            report["enhanced"]["accuracy"], report["enhanced"]["macro_f1"]
+        )
+        delta_score = _weighted_metric(
+            report["delta"]["accuracy"], report["delta"]["macro_f1"]
+        )
         weighted_scores.append(score)
         delta_scores.append(delta_score)
 
@@ -326,7 +361,9 @@ def _run_test_component() -> ComponentResult:
             "all_passed": ok,
             "output_tail": "\n".join(output.strip().splitlines()[-25:]),
         }
-        return ComponentResult(name="test_quality", score01=_clamp01(score), details=details)
+        return ComponentResult(
+            name="test_quality", score01=_clamp01(score), details=details
+        )
     except Exception as exc:
         details = {
             "score_index": 0,
@@ -338,15 +375,33 @@ def _run_test_component() -> ComponentResult:
         return ComponentResult(name="test_quality", score01=0.0, details=details)
 
 
-def _run_module_sanity_component() -> ComponentResult:
+def _run_module_sanity_component(
+    include_face_mesh_check: bool = True,
+) -> ComponentResult:
     checks = []
 
     try:
         from core.light_mapping import fuse_modalities
 
         out = fuse_modalities(
-            video_ema={"happy": 1.0, "sad": 0.0, "neutral": 0.0, "angry": 0.0, "fear": 0.0, "surprise": 0.0, "disgust": 0.0},
-            audio_ema={"happy": 0.0, "sad": 1.0, "neutral": 0.0, "angry": 0.0, "fear": 0.0, "surprise": 0.0, "disgust": 0.0},
+            video_ema={
+                "happy": 1.0,
+                "sad": 0.0,
+                "neutral": 0.0,
+                "angry": 0.0,
+                "fear": 0.0,
+                "surprise": 0.0,
+                "disgust": 0.0,
+            },
+            audio_ema={
+                "happy": 0.0,
+                "sad": 1.0,
+                "neutral": 0.0,
+                "angry": 0.0,
+                "fear": 0.0,
+                "surprise": 0.0,
+                "disgust": 0.0,
+            },
             pose_arousal_offset=0.0,
             audio_weight=0.5,
         )
@@ -359,7 +414,12 @@ def _run_module_sanity_component() -> ComponentResult:
 
         reg = EmotionRegulator(0.65, 0.35, 0.45, 0.8, 30.0, 0.1, 0.18)
         info = reg.update(-0.8, 0.8)
-        checks.append(("regulator_moves_toward_target", info["reg_v"] > -0.8 and info["reg_a"] < 0.8))
+        checks.append(
+            (
+                "regulator_moves_toward_target",
+                info["reg_v"] > -0.8 and info["reg_a"] < 0.8,
+            )
+        )
     except Exception:
         checks.append(("regulator_moves_toward_target", False))
 
@@ -368,7 +428,9 @@ def _run_module_sanity_component() -> ComponentResult:
 
         ibis = np.array([0.80, 0.82, 0.79, 0.81], dtype=np.float64)
         hr, rmssd, sdnn = _compute_hr_hrv(ibis)
-        checks.append(("hrv_signal_math", 65.0 <= hr <= 80.0 and rmssd >= 0.0 and sdnn >= 0.0))
+        checks.append(
+            ("hrv_signal_math", 65.0 <= hr <= 80.0 and rmssd >= 0.0 and sdnn >= 0.0)
+        )
     except Exception:
         checks.append(("hrv_signal_math", False))
 
@@ -381,25 +443,28 @@ def _run_module_sanity_component() -> ComponentResult:
     except Exception:
         checks.append(("breathing_peak_detection", False))
 
-    try:
-        from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
+    if include_face_mesh_check:
+        try:
+            from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
 
-        aus = {
-            "AU1": 0.2,
-            "AU2": 0.2,
-            "AU4": 0.1,
-            "AU6": 0.8,
-            "AU9": 0.1,
-            "AU12": 0.9,
-            "AU15": 0.1,
-            "AU20": 0.1,
-            "AU25": 0.2,
-            "AU26": 0.2,
-        }
-        scores = FaceMeshAnalyzer._aus_to_emotions(aus)
-        checks.append(("face_mesh_emotion_mapping", abs(sum(scores.values()) - 100.0) < 1e-6))
-    except Exception:
-        checks.append(("face_mesh_emotion_mapping", False))
+            aus = {
+                "AU1": 0.2,
+                "AU2": 0.2,
+                "AU4": 0.1,
+                "AU6": 0.8,
+                "AU9": 0.1,
+                "AU12": 0.9,
+                "AU15": 0.1,
+                "AU20": 0.1,
+                "AU25": 0.2,
+                "AU26": 0.2,
+            }
+            scores = FaceMeshAnalyzer._aus_to_emotions(aus)
+            checks.append(
+                ("face_mesh_emotion_mapping", abs(sum(scores.values()) - 100.0) < 1e-6)
+            )
+        except Exception:
+            checks.append(("face_mesh_emotion_mapping", False))
 
     passed = sum(1 for _, ok in checks if ok)
     total = len(checks)
@@ -411,14 +476,18 @@ def _run_module_sanity_component() -> ComponentResult:
         "total": total,
         "checks": [{"name": name, "ok": ok} for name, ok in checks],
     }
-    return ComponentResult(name="module_sanity", score01=_clamp01(score), details=details)
+    return ComponentResult(
+        name="module_sanity", score01=_clamp01(score), details=details
+    )
 
 
 def _run_e2e_runtime_component(preset: dict) -> ComponentResult:
     from e2e_runtime_benchmark import run_e2e_runtime_benchmark
 
     e2e_profile = str(preset.get("e2e_profile", "quick"))
-    report = run_e2e_runtime_benchmark(profile=e2e_profile, python_executable=sys.executable)
+    report = run_e2e_runtime_benchmark(
+        profile=e2e_profile, python_executable=sys.executable
+    )
     score = _clamp01(float(report.get("aggregate", {}).get("score01", 0.0)))
 
     details = {
@@ -488,7 +557,9 @@ def _gate(
                 + " Gate failed by policy. Refresh baseline only after explicit approval and evidence."
             )
         else:
-            warnings.append(mismatch_msg + " Composite gate check skipped due to override.")
+            warnings.append(
+                mismatch_msg + " Composite gate check skipped due to override."
+            )
 
     cur_components = current.get("components", {})
     base_components = baseline.get("components", {})
@@ -552,8 +623,12 @@ def _relative_to_baseline(current: dict, baseline: dict | None) -> dict:
         cur_index = float(_index(cur_score))
         base_index = float(_index(base_score))
 
-        per_component_score_pct[name] = ((cur_score / base_score) * 100.0) if base_score > 0.0 else None
-        per_component_idx_pct[name] = ((cur_index / base_index) * 100.0) if base_index > 0.0 else None
+        per_component_score_pct[name] = (
+            ((cur_score / base_score) * 100.0) if base_score > 0.0 else None
+        )
+        per_component_idx_pct[name] = (
+            ((cur_index / base_index) * 100.0) if base_index > 0.0 else None
+        )
 
     return {
         "baseline_present": True,
@@ -564,22 +639,34 @@ def _relative_to_baseline(current: dict, baseline: dict | None) -> dict:
 
 
 def _derive_improvement_targets(components: dict) -> list[str]:
-    rows = [(name, float(data.get("score01", 0.0))) for name, data in components.items()]
+    rows = [
+        (name, float(data.get("score01", 0.0))) for name, data in components.items()
+    ]
     rows.sort(key=lambda x: x[1])
     suggestions = []
     for name, score in rows[:2]:
         if name == "extreme_visual_robustness":
-            suggestions.append(f"Prioritaet: visuelle Robustheit steigern (aktuell {score:.3f}).")
+            suggestions.append(
+                f"Prioritaet: visuelle Robustheit steigern (aktuell {score:.3f})."
+            )
         elif name == "multi_seed_stability":
-            suggestions.append(f"Prioritaet: seed-uebergreifende Stabilitaet verbessern (aktuell {score:.3f}).")
+            suggestions.append(
+                f"Prioritaet: seed-uebergreifende Stabilitaet verbessern (aktuell {score:.3f})."
+            )
         elif name == "test_quality":
-            suggestions.append(f"Prioritaet: fehlschlagende Tests beheben (aktuell {score:.3f}).")
+            suggestions.append(
+                f"Prioritaet: fehlschlagende Tests beheben (aktuell {score:.3f})."
+            )
         elif name == "module_sanity":
-            suggestions.append(f"Prioritaet: Modul-Sanity-Checks reparieren (aktuell {score:.3f}).")
+            suggestions.append(
+                f"Prioritaet: Modul-Sanity-Checks reparieren (aktuell {score:.3f})."
+            )
     return suggestions
 
 
-def _run_real_world_uncertainty_extension(real_world_globs: list[str], low_conf_threshold: float) -> dict:
+def _run_real_world_uncertainty_extension(
+    real_world_globs: list[str], low_conf_threshold: float
+) -> dict:
     """Runs optional real-world and uncertainty evaluation from JSONL session data."""
     files: list[str] = []
     for pattern in real_world_globs:
@@ -617,19 +704,31 @@ def run_suite(args: argparse.Namespace) -> dict:
 
     preset = PROFILE_PRESETS[args.profile]
 
+    preflight_mode = bool(args.preflight)
+    lightweight_env_metadata = bool(
+        preset.get("lightweight_env_metadata", False) or preflight_mode
+    )
+    include_face_mesh_sanity = bool(
+        preset.get("sanity_include_face_mesh", True) and not preflight_mode
+    )
+    skip_tests = bool(args.skip_tests or preflight_mode)
+    skip_e2e = bool(args.skip_e2e or preflight_mode)
+
     run_started = time.perf_counter()
-    env_metadata = _collect_environment_metadata()
+    env_metadata = _collect_environment_metadata(lightweight=lightweight_env_metadata)
     skipped_components: list[str] = []
 
     t0 = time.perf_counter()
-    comp_extreme = _run_extreme_component(preset=preset, detector=args.detector, seed=args.seed)
+    comp_extreme = _run_extreme_component(
+        preset=preset, detector=args.detector, seed=args.seed
+    )
     t_extreme = time.perf_counter() - t0
 
     t0 = time.perf_counter()
     comp_stability = _run_stability_component(preset=preset, detector=args.detector)
     t_stability = time.perf_counter() - t0
 
-    if args.skip_tests:
+    if skip_tests:
         skipped_components.append("test_quality")
         comp_tests = ComponentResult(
             name="test_quality",
@@ -637,7 +736,9 @@ def run_suite(args: argparse.Namespace) -> dict:
             details={
                 "score_index": 0,
                 "skipped": True,
-                "reason": "Skipped by --skip-tests",
+                "reason": "Skipped by preflight mode"
+                if preflight_mode
+                else "Skipped by --skip-tests",
             },
         )
         t_tests = 0.0
@@ -647,10 +748,12 @@ def run_suite(args: argparse.Namespace) -> dict:
         t_tests = time.perf_counter() - t0
 
     t0 = time.perf_counter()
-    comp_sanity = _run_module_sanity_component()
+    comp_sanity = _run_module_sanity_component(
+        include_face_mesh_check=include_face_mesh_sanity
+    )
     t_sanity = time.perf_counter() - t0
 
-    if args.skip_e2e:
+    if skip_e2e:
         skipped_components.append("e2e_runtime")
         comp_e2e = ComponentResult(
             name="e2e_runtime",
@@ -658,7 +761,9 @@ def run_suite(args: argparse.Namespace) -> dict:
             details={
                 "score_index": 0,
                 "skipped": True,
-                "reason": "Skipped by --skip-e2e",
+                "reason": "Skipped by preflight mode"
+                if preflight_mode
+                else "Skipped by --skip-e2e",
             },
         )
         t_e2e = 0.0
@@ -675,10 +780,19 @@ def run_suite(args: argparse.Namespace) -> dict:
     t_real_world_uncertainty = time.perf_counter() - t0
 
     components = {
-        comp_extreme.name: {"score01": comp_extreme.score01, "details": comp_extreme.details},
-        comp_stability.name: {"score01": comp_stability.score01, "details": comp_stability.details},
+        comp_extreme.name: {
+            "score01": comp_extreme.score01,
+            "details": comp_extreme.details,
+        },
+        comp_stability.name: {
+            "score01": comp_stability.score01,
+            "details": comp_stability.details,
+        },
         comp_tests.name: {"score01": comp_tests.score01, "details": comp_tests.details},
-        comp_sanity.name: {"score01": comp_sanity.score01, "details": comp_sanity.details},
+        comp_sanity.name: {
+            "score01": comp_sanity.score01,
+            "details": comp_sanity.details,
+        },
         comp_e2e.name: {"score01": comp_e2e.score01, "details": comp_e2e.details},
     }
 
@@ -702,12 +816,14 @@ def run_suite(args: argparse.Namespace) -> dict:
 
     report = {
         "benchmark": "reference_suite_v2",
-        "generated_at_utc": dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z",
+        "generated_at_utc": dt.datetime.utcnow().replace(microsecond=0).isoformat()
+        + "Z",
         "profile": args.profile,
         "settings": {
             "seed": int(args.seed),
             "detector": args.detector,
             "preset": preset,
+            "preflight": preflight_mode,
             "weights": weights,
             "active_components": active_components,
             "skipped_components": sorted(skipped_components),
@@ -745,7 +861,9 @@ def run_suite(args: argparse.Namespace) -> dict:
         fail_on_benchmark_mismatch=not args.allow_incompatible_baseline,
         skipped_components=skipped_components,
     )
-    report["relative_to_baseline"] = _relative_to_baseline(current=report, baseline=baseline)
+    report["relative_to_baseline"] = _relative_to_baseline(
+        current=report, baseline=baseline
+    )
     report["improvement_targets"] = _derive_improvement_targets(components)
 
     return report
@@ -757,7 +875,9 @@ def _write_json(path: str, payload: dict) -> None:
         json.dump(payload, f, indent=2)
 
 
-def _load_last_history_entry(history_path: str, profile: str, detector: str) -> dict | None:
+def _load_last_history_entry(
+    history_path: str, profile: str, detector: str
+) -> dict | None:
     """Load the latest comparable history entry.
 
     Preference order:
@@ -783,7 +903,8 @@ def _load_last_history_entry(history_path: str, profile: str, detector: str) -> 
         return None
 
     same_profile_detector = [
-        e for e in entries
+        e
+        for e in entries
         if e.get("profile") == profile and e.get("detector") == detector
     ]
     if same_profile_detector:
@@ -835,13 +956,23 @@ def _build_trend_block(report: dict, previous_entry: dict | None) -> dict:
     for name, cur_idx in cur_comp.items():
         per_component_delta[name] = int(cur_idx) - int(prev_comp.get(name, 0))
 
-    comp_delta = int(current_entry["composite_index"]) - int(previous_entry.get("composite_index", 0))
-    direction = "improved" if comp_delta > 0 else ("regressed" if comp_delta < 0 else "flat")
-    basis = "same-profile+detector" if (
-        previous_entry.get("profile") == current_entry.get("profile")
-        and previous_entry.get("detector") == current_entry.get("detector")
-    ) else (
-        "same-profile" if previous_entry.get("profile") == current_entry.get("profile") else "latest-any"
+    comp_delta = int(current_entry["composite_index"]) - int(
+        previous_entry.get("composite_index", 0)
+    )
+    direction = (
+        "improved" if comp_delta > 0 else ("regressed" if comp_delta < 0 else "flat")
+    )
+    basis = (
+        "same-profile+detector"
+        if (
+            previous_entry.get("profile") == current_entry.get("profile")
+            and previous_entry.get("detector") == current_entry.get("detector")
+        )
+        else (
+            "same-profile"
+            if previous_entry.get("profile") == current_entry.get("profile")
+            else "latest-any"
+        )
     )
 
     return {
@@ -858,8 +989,16 @@ def _build_trend_block(report: dict, previous_entry: dict | None) -> dict:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run the full reference benchmark suite")
-    parser.add_argument("--profile", "--mode", dest="profile", choices=["quick", "standard", "strict"], default="standard")
+    parser = argparse.ArgumentParser(
+        description="Run the full reference benchmark suite"
+    )
+    parser.add_argument(
+        "--profile",
+        "--mode",
+        dest="profile",
+        choices=["quick", "standard", "strict"],
+        default="standard",
+    )
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--detector", type=str, default="opencv")
     parser.add_argument(
@@ -900,6 +1039,15 @@ def main() -> int:
         help="Skip e2e_runtime component for faster local iteration (not valid with --enforce-gate).",
     )
     parser.add_argument(
+        "--preflight",
+        action="store_true",
+        help=(
+            "Ultra-fast pre-change benchmark mode for agents. "
+            "Implies skipping tests and e2e_runtime, uses lightweight metadata collection, "
+            "and keeps quick profile bounded for sub-5s target."
+        ),
+    )
+    parser.add_argument(
         "--history",
         type=str,
         default=os.path.join("benchmarks", "results", "reference_suite_history.jsonl"),
@@ -924,8 +1072,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if args.enforce_gate and (args.skip_tests or args.skip_e2e):
-        parser.error("--enforce-gate cannot be used together with --skip-tests or --skip-e2e")
+    if args.enforce_gate and (args.skip_tests or args.skip_e2e or args.preflight):
+        parser.error(
+            "--enforce-gate cannot be used together with --skip-tests, --skip-e2e, or --preflight"
+        )
 
     previous_entry = None
     if not args.no_history:

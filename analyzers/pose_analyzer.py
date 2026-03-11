@@ -5,14 +5,21 @@ Extrahiert Arousal-relevante Merkmale aus Koerperhaltung:
 - Kopfneigung (vorne = Muedigkeit, aufrecht = Aufmerksamkeit)
 - Schulter-Asymmetrie (ungleich = Unruhe)
 
-Liefert einen Arousal-Offset (-1.0 bis +1.0) der auf die Lichtsteuerung angewendet wird.
+Erweiterte Analysesignale:
+- Torso-Vorneigung (Konzentration / Engagement)
+- Schulter-Absenkung (Erschoepfung / Resignation)
+- Kopf-Seitneigung (Interesse / Entspannung)
+
+Liefert einen Arousal-Offset (-1.0 bis +1.0) sowie detaillierte Koerper-Signale.
 """
 
 import logging
-import threading
-import queue
-import cv2
 import os
+import queue
+import threading
+
+import cv2
+
 from core.asset_integrity import ensure_mediapipe_model
 
 log = logging.getLogger("emotion-light.pose")
@@ -23,10 +30,16 @@ class PoseEmotionAnalyzer:
 
     def __init__(self):
         import mediapipe as mp  # noqa: F401 — Verfuegbarkeit pruefen
+
         self._q: queue.Queue = queue.Queue(maxsize=1)
         self._lock = threading.Lock()
         self._running = False
-        self._result = {"arousal_offset": 0.0}
+        self._result = {
+            "arousal_offset": 0.0,
+            "torso_lean": 0.0,  # -1 zurueck .. +1 vorne
+            "shoulder_drop": 0.0,  # 0 normal .. +1 stark abgesackt
+            "head_tilt": 0.0,  # Seitneigung in Grad (pos = rechts)
+        }
         self._pose = None
         self._pose_mode = None  # "solutions" | "tasks"
 
@@ -51,6 +64,7 @@ class PoseEmotionAnalyzer:
         # 1) Legacy-API (mp.solutions.pose)
         try:
             import mediapipe as mp
+
             PoseCls = mp.solutions.pose.Pose
             self._pose = PoseCls(
                 static_image_mode=False,
@@ -67,6 +81,7 @@ class PoseEmotionAnalyzer:
         # 2) Tasks-API (neuere/angepasste Wheels)
         try:
             import mediapipe as mp
+
             mt = mp.tasks
             BaseOptions = mt.BaseOptions
             PoseLandmarker = mt.vision.PoseLandmarker
@@ -76,7 +91,9 @@ class PoseEmotionAnalyzer:
             model_dir = os.path.join("pretrained_models", "mediapipe")
             os.makedirs(model_dir, exist_ok=True)
             model_path = os.path.join(model_dir, "pose_landmarker_lite.task")
-            model_path = ensure_mediapipe_model("pose_landmarker_lite.task", model_dir=model_dir)
+            model_path = ensure_mediapipe_model(
+                "pose_landmarker_lite.task", model_dir=model_dir
+            )
 
             options = PoseLandmarkerOptions(
                 base_options=BaseOptions(model_asset_path=model_path),
@@ -107,10 +124,19 @@ class PoseEmotionAnalyzer:
                 lm = self._extract_landmarks(frame)
                 if lm is None:
                     continue
-                arousal_offset = self._compute_arousal(lm, frame.shape)
+                shape = frame.shape
+                arousal_offset = self._compute_arousal(lm, shape)
+                torso_lean = self._compute_torso_lean(lm, shape)
+                shoulder_drop = self._compute_shoulder_drop(lm, shape)
+                head_tilt = self._compute_head_tilt(lm, shape)
 
                 with self._lock:
-                    self._result = {"arousal_offset": arousal_offset}
+                    self._result = {
+                        "arousal_offset": arousal_offset,
+                        "torso_lean": torso_lean,
+                        "shoulder_drop": shoulder_drop,
+                        "head_tilt": head_tilt,
+                    }
 
             except Exception as exc:
                 log.debug("Pose-Analyse fehlgeschlagen: %s", exc)
@@ -127,6 +153,7 @@ class PoseEmotionAnalyzer:
 
         if self._pose_mode == "tasks":
             import mediapipe as mp
+
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
             result = self._pose.detect(mp_image)
             if not result.pose_landmarks:
@@ -166,6 +193,65 @@ class PoseEmotionAnalyzer:
         signals.append(asym_signal * 0.25)
 
         return max(-1.0, min(1.0, sum(signals)))
+
+    def _compute_torso_lean(self, landmarks, frame_shape) -> float:
+        """Torso-Vorneigung: positiv = nach vorne, negativ = zurueckgelehnt.
+
+        Berechnet aus dem Z-Abstand Nase-Schultern (naeher = vornuebergebeugt).
+        Alternativ: Y-basiert (Nase deutlich ueber Schultern = aufrecht).
+        """
+        nose = landmarks[0]
+        l_shoulder = landmarks[11]
+        r_shoulder = landmarks[12]
+        avg_shoulder_y = (l_shoulder.y + r_shoulder.y) / 2.0
+
+        # Nase Y relativ zu Schultern: negativer Wert = Nase ueber Schultern (aufrecht)
+        lean = avg_shoulder_y - nose.y
+        # Typisch: aufrecht ~0.3, vornuebergebeugt ~0.15
+        lean_norm = (0.25 - lean) * 6.0  # Positiv = vorne, negativ = zurueck
+        return max(-1.0, min(1.0, lean_norm))
+
+    def _compute_shoulder_drop(self, landmarks, frame_shape) -> float:
+        """Schulterabsenkung: wie tief die Schultern relativ zur Kopfposition haengen.
+
+        Hoher Wert = durchhaengende Schultern (Muedigkeit/Resignation).
+        """
+        nose = landmarks[0]
+        l_shoulder = landmarks[11]
+        r_shoulder = landmarks[12]
+        avg_shoulder_y = (l_shoulder.y + r_shoulder.y) / 2.0
+
+        # Abstand Nase-Schultern vertikal: Groesserer Wert = Schultern haengen tiefer
+        drop = avg_shoulder_y - nose.y
+        # Normwert: aufrecht ~0.20-0.25; abgesackt ~0.33+
+        drop_norm = max(0.0, (drop - 0.22) * 8.0)
+        return min(1.0, drop_norm)
+
+    def _compute_head_tilt(self, landmarks, frame_shape) -> float:
+        """Kopf-Seitneigung in normiertem Bereich (-1..+1).
+
+        Positiv = rechts geneigt, negativ = links geneigt.
+        Leichte Seitneigung kann Interesse oder Entspannung signalisieren.
+        """
+        # Landmarks 7 (linkes Ohr) und 8 (rechtes Ohr)
+        try:
+            l_ear = landmarks[7]
+            r_ear = landmarks[8]
+            h, w = frame_shape[:2]
+
+            # Y-Differenz der Ohren normiert auf Bildhoehe
+            dy = (r_ear.y - l_ear.y) * h
+            dx = (r_ear.x - l_ear.x) * w
+            if abs(dx) < 1.0:
+                return 0.0
+
+            import math
+
+            tilt_rad = math.atan2(dy, abs(dx))
+            tilt_norm = tilt_rad / (math.pi / 4)  # ±45° → ±1.0
+            return max(-1.0, min(1.0, tilt_norm))
+        except (IndexError, AttributeError):
+            return 0.0
 
     def get(self) -> dict:
         with self._lock:
