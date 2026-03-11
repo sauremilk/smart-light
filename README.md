@@ -46,6 +46,11 @@ Weitere Details: `docs/ALEXA_INTEGRATION.md`
 .\setup.ps1
 ```
 
+```bash
+# Linux / macOS – im Projektordner ausführen:
+bash setup.sh
+```
+
 Das Setup aktiviert auch lokale Git-Hooks (`core.hooksPath=.githooks`).
 Dadurch werden wichtige staged Änderungen automatisch in
 `docs/IMPORTANT_CHANGES.md` dokumentiert, sobald ein Commit erstellt wird.
@@ -377,14 +382,14 @@ Das direkte Emotion→Farbe-Mapping bleibt als Fallback erhalten (`USE_VALENCE_A
 
 ### Hardware & Capture
 
-| Konstante                 | Default            | Beschreibung                             |
-| ------------------------- | ------------------ | ---------------------------------------- |
-| `WEBCAM_INDEX`            | `0`                | Device-Index der USB-Webcam              |
-| `HUE_BRIDGE_IP`           | `"192.168.178.20"` | **Pflichtfeld ändern!**                  |
-| `HUE_LIGHT_IDS`           | `[2,3,4,6]`        | Liste der zu steuernden Lampen-IDs       |
-| `FRAME_WIDTH/HEIGHT`      | `640/480`          | Auflösung des Kamera-Feeds               |
-| `ANALYSIS_EVERY_N_FRAMES` | `5`                | Jeden n-ten Frame analysieren            |
-| `CAMERA_BUFFER_SIZE`      | `1`                | Kamera-Puffer (1 = immer neuester Frame) |
+| Konstante                 | Default     | Beschreibung                                  |
+| ------------------------- | ----------- | --------------------------------------------- |
+| `WEBCAM_INDEX`            | `0`         | Device-Index der USB-Webcam                   |
+| `HUE_BRIDGE_IP`           | `None`      | **Pflichtfeld** – in `config_local.py` setzen |
+| `HUE_LIGHT_IDS`           | `[2,3,4,6]` | Liste der zu steuernden Lampen-IDs            |
+| `FRAME_WIDTH/HEIGHT`      | `640/480`   | Auflösung des Kamera-Feeds                    |
+| `ANALYSIS_EVERY_N_FRAMES` | `5`         | Jeden n-ten Frame analysieren                 |
+| `CAMERA_BUFFER_SIZE`      | `1`         | Kamera-Puffer (1 = immer neuester Frame)      |
 
 ### DeepFace & Bildverarbeitung
 
@@ -445,6 +450,7 @@ pose_analyzer.py   ← Körpersprache-Analyse (MediaPipe Pose, Hintergrund-Threa
 calibration.py     ← Interaktive Nutzer-Kalibrierung
 requirements.txt
 setup.ps1          ← Windows-Einrichtungsskript
+setup.sh           ← Linux/macOS-Einrichtungsskript
 ```
 
 Threads während des Betriebs:

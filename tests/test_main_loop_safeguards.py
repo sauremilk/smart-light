@@ -3,6 +3,8 @@ import sys
 import time
 import types
 
+from config import HUE_MIN_UPDATE_INTERVAL
+
 
 def import_main_with_bridge_stub(bridge_cls):
     deepface_module = types.ModuleType("deepface")
@@ -74,9 +76,9 @@ def test_hue_sender_queue_eventually_applies_latest_command():
     hue = main.HueController("127.0.0.1", [1], {1: "primary"})
 
     hue.apply({"hue": 1000, "bri": 100, "sat": 100}, transition=1)
-    time.sleep(main.HUE_MIN_UPDATE_INTERVAL + 0.03)
+    time.sleep(HUE_MIN_UPDATE_INTERVAL + 0.03)
     hue.apply({"hue": 12000, "bri": 110, "sat": 110}, transition=1)
-    time.sleep(main.HUE_MIN_UPDATE_INTERVAL + 0.03)
+    time.sleep(HUE_MIN_UPDATE_INTERVAL + 0.03)
     hue.apply({"hue": 30000, "bri": 130, "sat": 120}, transition=1)
 
     time.sleep(0.35)

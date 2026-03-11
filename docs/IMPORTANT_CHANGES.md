@@ -80,3 +80,28 @@ Affected critical paths:
 - `main.py`
 - `requirements.txt`
 
+## 2026-03-11 12:00:27
+<!-- autodoc:13be4001b62c -->
+
+Source: `working-tree` by `copilot-agent`
+
+Affected critical paths:
+- `README.md`
+- `config.py`
+- `core/light_mapping.py`
+- `main.py`
+
+## 2026-03-11 12:11:13
+<!-- autodoc:de296d594715 -->
+
+Source: `staged` by `unknown`
+
+Affected critical paths:
+- `README.md`
+- `config.py`
+- `core/capture.py`
+- `core/fusion.py`
+- `core/light_mapping.py`
+- `core/session_log.py`
+- `main.py`
+

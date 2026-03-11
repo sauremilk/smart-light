@@ -220,14 +220,19 @@ def compose_multi_light_scene(primary: dict, role: str) -> dict:
 
     result = primary.copy()
     if role == "accent":
-        result["hue"] = max(0, min(_HUE_MAX, result["hue"] + 1500))
-        result["sat"] = max(0, min(254, int(result["sat"] * 0.9)))
+        if "hue" in result:
+            result["hue"] = max(0, min(_HUE_MAX, result["hue"] + 1500))
+        if "sat" in result:
+            result["sat"] = max(0, min(254, int(result["sat"] * 0.9)))
         if "ct" in result:
             result["ct"] = max(153, min(500, result["ct"] + 15))  # etwas waermer
     elif role == "ambient":
-        result["hue"] = max(0, min(_HUE_MAX, result["hue"] + 2000))
-        result["sat"] = max(0, min(254, int(result["sat"] * 0.6)))
-        result["bri"] = max(1, min(254, int(result["bri"] * 0.7)))
+        if "hue" in result:
+            result["hue"] = max(0, min(_HUE_MAX, result["hue"] + 2000))
+        if "sat" in result:
+            result["sat"] = max(0, min(254, int(result["sat"] * 0.6)))
+        if "bri" in result:
+            result["bri"] = max(1, min(254, int(result["bri"] * 0.7)))
         if "ct" in result:
             result["ct"] = max(153, min(500, result["ct"] + 30))  # deutlich waermer
 

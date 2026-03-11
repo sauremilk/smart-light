@@ -1,7 +1,10 @@
 import importlib
 import sys
 import types
+
 import numpy as np
+
+from core.overlay import _build_status_text, _build_top3_text
 
 
 def import_main_with_stubs():
@@ -38,9 +41,7 @@ def import_main_with_stubs():
 
 
 def test_build_top3_text_with_fused_ema_returns_ranked_values():
-    main = import_main_with_stubs()
-
-    text = main._build_top3_text(
+    text = _build_top3_text(
         fused_ema={"happy": 0.5, "sad": 0.3, "neutral": 0.2, "angry": 0.1},
         emotion="neutral",
         confidence=0.0,
@@ -50,17 +51,13 @@ def test_build_top3_text_with_fused_ema_returns_ranked_values():
 
 
 def test_build_top3_text_falls_back_to_emotion_confidence_without_fusion():
-    main = import_main_with_stubs()
-
-    text = main._build_top3_text(fused_ema={}, emotion="neutral", confidence=0.42)
+    text = _build_top3_text(fused_ema={}, emotion="neutral", confidence=0.42)
 
     assert text == "neutral (42%)"
 
 
 def test_build_status_text_includes_enabled_modules_and_burst_suffix():
-    main = import_main_with_stubs()
-
-    status = main._build_status_text(
+    status = _build_status_text(
         fps_display=28.7,
         analysis_every_n=5,
         has_audio=True,
@@ -74,9 +71,7 @@ def test_build_status_text_includes_enabled_modules_and_burst_suffix():
 
 
 def test_build_status_text_includes_face_mesh_module():
-    main = import_main_with_stubs()
-
-    status = main._build_status_text(
+    status = _build_status_text(
         fps_display=24.0,
         analysis_every_n=7,
         has_audio=False,

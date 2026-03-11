@@ -3,7 +3,10 @@
 import importlib
 import sys
 import types
+
 import numpy as np
+
+from core.preprocessing import gray_world_correction
 
 
 def import_main_with_stubs():
@@ -44,11 +47,9 @@ def import_main_with_stubs():
 
 
 def test_gray_world_correction_normalizes_color_channels():
-    main = import_main_with_stubs()
-
     # Bild mit starkem Blaustich (simuliert blaue Hue-Lampe)
     frame = np.full((100, 100, 3), [50, 50, 200], dtype=np.uint8)
-    corrected = main.gray_world_correction(frame)
+    corrected = gray_world_correction(frame)
 
     # Alle Kanaele sollten nach Korrektur naeher an 128 liegen
     for c in range(3):
@@ -57,21 +58,17 @@ def test_gray_world_correction_normalizes_color_channels():
 
 
 def test_gray_world_correction_preserves_shape():
-    main = import_main_with_stubs()
-
     frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-    corrected = main.gray_world_correction(frame)
+    corrected = gray_world_correction(frame)
 
     assert corrected.shape == frame.shape
     assert corrected.dtype == np.uint8
 
 
 def test_gray_world_correction_handles_dark_image():
-    main = import_main_with_stubs()
-
     # Fast schwarzes Bild → sollte nicht durch 0 dividieren
     frame = np.zeros((50, 50, 3), dtype=np.uint8)
-    corrected = main.gray_world_correction(frame)
+    corrected = gray_world_correction(frame)
 
     assert corrected.shape == frame.shape
 
@@ -83,7 +80,9 @@ def test_aus_to_emotions_happy_with_duchenne_smile():
     """AU6 (Cheek Raiser) + AU12 (Lip Corner Puller) → happy dominant."""
     from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
 
-    aus = {k: 0.0 for k in ["AU1", "AU2", "AU4", "AU6", "AU9", "AU12", "AU15", "AU20", "AU25", "AU26"]}
+    aus = {
+        k: 0.0 for k in ["AU1", "AU2", "AU4", "AU6", "AU9", "AU12", "AU15", "AU20", "AU25", "AU26"]
+    }
     aus["AU6"] = 1.2
     aus["AU12"] = 1.5
 
@@ -99,7 +98,9 @@ def test_aus_to_emotions_neutral_with_low_activity():
     """Keine signifikanten AUs → neutral dominant."""
     from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
 
-    aus = {k: 0.0 for k in ["AU1", "AU2", "AU4", "AU6", "AU9", "AU12", "AU15", "AU20", "AU25", "AU26"]}
+    aus = {
+        k: 0.0 for k in ["AU1", "AU2", "AU4", "AU6", "AU9", "AU12", "AU15", "AU20", "AU25", "AU26"]
+    }
 
     scores = FaceMeshAnalyzer._aus_to_emotions(aus)
 
@@ -111,7 +112,9 @@ def test_aus_to_emotions_surprise_with_raised_brows_and_jaw():
     """AU1 + AU2 (Brauen hoch) + AU25/AU26 (Mund offen) → surprise."""
     from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
 
-    aus = {k: 0.0 for k in ["AU1", "AU2", "AU4", "AU6", "AU9", "AU12", "AU15", "AU20", "AU25", "AU26"]}
+    aus = {
+        k: 0.0 for k in ["AU1", "AU2", "AU4", "AU6", "AU9", "AU12", "AU15", "AU20", "AU25", "AU26"]
+    }
     aus["AU1"] = 1.5
     aus["AU2"] = 1.3
     aus["AU25"] = 1.8
@@ -126,7 +129,9 @@ def test_aus_to_emotions_scores_sum_to_100():
     """Alle Score-Vektoren summieren sich auf 100."""
     from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
 
-    aus = {k: 0.5 for k in ["AU1", "AU2", "AU4", "AU6", "AU9", "AU12", "AU15", "AU20", "AU25", "AU26"]}
+    aus = {
+        k: 0.5 for k in ["AU1", "AU2", "AU4", "AU6", "AU9", "AU12", "AU15", "AU20", "AU25", "AU26"]
+    }
 
     scores = FaceMeshAnalyzer._aus_to_emotions(aus)
 
@@ -141,9 +146,7 @@ def test_head_pose_confidence_full_at_frontal():
     """Frontale Kopfhaltung → Confidence-Faktor = 1.0."""
     from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
 
-    factor = FaceMeshAnalyzer._head_pose_to_confidence(
-        {"yaw": 5.0, "pitch": 3.0, "roll": 0.0}
-    )
+    factor = FaceMeshAnalyzer._head_pose_to_confidence({"yaw": 5.0, "pitch": 3.0, "roll": 0.0})
     assert factor == 1.0
 
 
@@ -151,9 +154,7 @@ def test_head_pose_confidence_reduced_at_extreme_yaw():
     """Starke Seitendrehung → Confidence-Faktor < 1.0."""
     from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
 
-    factor = FaceMeshAnalyzer._head_pose_to_confidence(
-        {"yaw": 50.0, "pitch": 0.0, "roll": 0.0}
-    )
+    factor = FaceMeshAnalyzer._head_pose_to_confidence({"yaw": 50.0, "pitch": 0.0, "roll": 0.0})
     assert factor < 1.0
     assert factor >= 0.5  # Nicht unter MAX_ATTENUATION
 
@@ -162,9 +163,7 @@ def test_head_pose_confidence_reduced_at_extreme_pitch():
     """Starke Kopfneigung → Confidence-Faktor < 1.0."""
     from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
 
-    factor = FaceMeshAnalyzer._head_pose_to_confidence(
-        {"yaw": 0.0, "pitch": 40.0, "roll": 0.0}
-    )
+    factor = FaceMeshAnalyzer._head_pose_to_confidence({"yaw": 0.0, "pitch": 40.0, "roll": 0.0})
     assert factor < 1.0
     assert factor >= 0.5
 
@@ -173,7 +172,5 @@ def test_head_pose_confidence_never_below_minimum():
     """Auch bei extremer Pose nie unter HEAD_POSE_MAX_ATTENUATION."""
     from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
 
-    factor = FaceMeshAnalyzer._head_pose_to_confidence(
-        {"yaw": 90.0, "pitch": 80.0, "roll": 45.0}
-    )
+    factor = FaceMeshAnalyzer._head_pose_to_confidence({"yaw": 90.0, "pitch": 80.0, "roll": 45.0})
     assert factor >= 0.5

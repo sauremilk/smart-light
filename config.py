@@ -21,12 +21,18 @@ class AppSettings(BaseSettings):
 
     # === Kanonische Emotionsliste (Single Source of Truth) ===
     EMOTIONS: tuple[str, ...] = (
-        "angry", "disgust", "fear", "happy", "sad", "surprise", "neutral",
+        "angry",
+        "disgust",
+        "fear",
+        "happy",
+        "sad",
+        "surprise",
+        "neutral",
     )
 
     # === Hardware ===
     WEBCAM_INDEX: int = 0
-    HUE_BRIDGE_IP: str = "192.168.178.20"
+    HUE_BRIDGE_IP: str | None = None
     HUE_LIGHT_IDS: list[int] = [2, 3, 4, 6]
 
     # === Capture ===
@@ -517,6 +523,7 @@ try:
         settings = settings.model_copy(update=_overrides)
         # Module-Level-Konstanten ebenfalls aktualisieren
         import sys as _sys
+
         _this = _sys.modules[__name__]
         for _k, _v in _overrides.items():
             setattr(_this, _k, _v)

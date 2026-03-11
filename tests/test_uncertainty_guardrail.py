@@ -2,6 +2,8 @@ import importlib
 import sys
 import types
 
+from core.overlay import _build_status_text
+
 
 def import_main_with_stubs():
     deepface_module = types.ModuleType("deepface")
@@ -68,9 +70,7 @@ def test_prediction_quality_prefers_peaked_distribution():
 
 
 def test_status_text_marks_low_quality_guardrail():
-    main = import_main_with_stubs()
-
-    status = main._build_status_text(
+    status = _build_status_text(
         fps_display=20.0,
         analysis_every_n=8,
         has_audio=True,
