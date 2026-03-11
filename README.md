@@ -189,12 +189,22 @@ stability_score01 = clamp01(mean(enhanced_weighted_score) - 0.5 * std(enhanced_w
 # Schneller Entwicklungs-Check
 .\venv\Scripts\python benchmarks\reference_suite.py --profile quick
 
+# Noch schnellerer lokaler Loop (ohne E2E-Laufzeitmessung)
+.\venv\Scripts\python benchmarks\reference_suite.py --profile quick --skip-e2e
+
+# Minimaler lokaler Loop (ohne E2E und ohne Test-Saeule)
+.\venv\Scripts\python benchmarks\reference_suite.py --profile quick --skip-e2e --skip-tests
+
 # Vor Handover / Pull Request (Regression-Gate aktiv)
 .\venv\Scripts\python benchmarks\reference_suite.py --profile standard --enforce-gate
 
 # Strenger Referenzlauf
 .\venv\Scripts\python benchmarks\reference_suite.py --profile strict --enforce-gate
 ```
+
+Hinweis:
+- `--skip-e2e` und `--skip-tests` sind nur fuer lokale Iteration gedacht.
+- Mit `--enforce-gate` sind diese Flags absichtlich nicht kombinierbar.
 
 Ausgabe:
 - `benchmarks/results/reference_suite_latest.json`

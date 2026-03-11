@@ -342,7 +342,7 @@ def _run_module_sanity_component() -> ComponentResult:
     checks = []
 
     try:
-        from light_mapping import fuse_modalities
+        from core.light_mapping import fuse_modalities
 
         out = fuse_modalities(
             video_ema={"happy": 1.0, "sad": 0.0, "neutral": 0.0, "angry": 0.0, "fear": 0.0, "surprise": 0.0, "disgust": 0.0},
@@ -355,7 +355,7 @@ def _run_module_sanity_component() -> ComponentResult:
         checks.append(("fusion_normalized", False))
 
     try:
-        from emotion_regulator import EmotionRegulator
+        from core.emotion_regulator import EmotionRegulator
 
         reg = EmotionRegulator(0.65, 0.35, 0.45, 0.8, 30.0, 0.1, 0.18)
         info = reg.update(-0.8, 0.8)
@@ -364,7 +364,7 @@ def _run_module_sanity_component() -> ComponentResult:
         checks.append(("regulator_moves_toward_target", False))
 
     try:
-        from hrv_analyzer import _compute_hr_hrv
+        from analyzers.hrv_analyzer import _compute_hr_hrv
 
         ibis = np.array([0.80, 0.82, 0.79, 0.81], dtype=np.float64)
         hr, rmssd, sdnn = _compute_hr_hrv(ibis)
@@ -373,7 +373,7 @@ def _run_module_sanity_component() -> ComponentResult:
         checks.append(("hrv_signal_math", False))
 
     try:
-        from breathing_analyzer import _find_peaks_simple
+        from analyzers.breathing_analyzer import _find_peaks_simple
 
         signal = np.array([0.0, 1.0, 0.0, 1.1, 0.0, 1.2, 0.0], dtype=np.float64)
         peaks = _find_peaks_simple(signal, min_dist=1)
@@ -382,7 +382,7 @@ def _run_module_sanity_component() -> ComponentResult:
         checks.append(("breathing_peak_detection", False))
 
     try:
-        from face_mesh_analyzer import FaceMeshAnalyzer
+        from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
 
         aus = {
             "AU1": 0.2,
@@ -444,7 +444,10 @@ def _gate(
     max_composite_drop: int,
     max_component_drop: float,
     fail_on_benchmark_mismatch: bool = True,
+    skipped_components: list[str] | None = None,
 ) -> dict:
+    skipped = set(skipped_components or [])
+
     if baseline is None:
         return {
             "baseline_present": False,
@@ -462,8 +465,15 @@ def _gate(
     current_idx = int(current["composite"]["index"])
     base_idx = int(baseline.get("composite", {}).get("index", 0))
 
+    if skipped:
+        warnings.append(
+            "Gate partial-check mode: skipped components="
+            + ", ".join(sorted(skipped))
+            + ". Composite drop check disabled."
+        )
+
     if benchmark_compatible:
-        if current_idx < (base_idx - int(max_composite_drop)):
+        if (not skipped) and current_idx < (base_idx - int(max_composite_drop)):
             failures.append(
                 f"Composite index dropped too much: current={current_idx}, baseline={base_idx}, allowed_drop={max_composite_drop}"
             )
@@ -483,6 +493,8 @@ def _gate(
     cur_components = current.get("components", {})
     base_components = baseline.get("components", {})
     for name, cur in cur_components.items():
+        if name in skipped:
+            continue
         if name not in base_components:
             continue
         base = base_components[name]
@@ -607,6 +619,7 @@ def run_suite(args: argparse.Namespace) -> dict:
 
     run_started = time.perf_counter()
     env_metadata = _collect_environment_metadata()
+    skipped_components: list[str] = []
 
     t0 = time.perf_counter()
     comp_extreme = _run_extreme_component(preset=preset, detector=args.detector, seed=args.seed)
@@ -616,17 +629,43 @@ def run_suite(args: argparse.Namespace) -> dict:
     comp_stability = _run_stability_component(preset=preset, detector=args.detector)
     t_stability = time.perf_counter() - t0
 
-    t0 = time.perf_counter()
-    comp_tests = _run_test_component()
-    t_tests = time.perf_counter() - t0
+    if args.skip_tests:
+        skipped_components.append("test_quality")
+        comp_tests = ComponentResult(
+            name="test_quality",
+            score01=0.0,
+            details={
+                "score_index": 0,
+                "skipped": True,
+                "reason": "Skipped by --skip-tests",
+            },
+        )
+        t_tests = 0.0
+    else:
+        t0 = time.perf_counter()
+        comp_tests = _run_test_component()
+        t_tests = time.perf_counter() - t0
 
     t0 = time.perf_counter()
     comp_sanity = _run_module_sanity_component()
     t_sanity = time.perf_counter() - t0
 
-    t0 = time.perf_counter()
-    comp_e2e = _run_e2e_runtime_component(preset=preset)
-    t_e2e = time.perf_counter() - t0
+    if args.skip_e2e:
+        skipped_components.append("e2e_runtime")
+        comp_e2e = ComponentResult(
+            name="e2e_runtime",
+            score01=0.0,
+            details={
+                "score_index": 0,
+                "skipped": True,
+                "reason": "Skipped by --skip-e2e",
+            },
+        )
+        t_e2e = 0.0
+    else:
+        t0 = time.perf_counter()
+        comp_e2e = _run_e2e_runtime_component(preset=preset)
+        t_e2e = time.perf_counter() - t0
 
     t0 = time.perf_counter()
     real_world_uncertainty = _run_real_world_uncertainty_extension(
@@ -652,10 +691,14 @@ def run_suite(args: argparse.Namespace) -> dict:
         "e2e_runtime": 0.10,
     }
 
+    active_components = [name for name in weights if name not in skipped_components]
+    active_weight_sum = sum(float(weights[name]) for name in active_components)
     composite_score = 0.0
-    for name, weight in weights.items():
-        composite_score += float(components[name]["score01"]) * float(weight)
-    composite_score = _clamp01(composite_score)
+    if active_weight_sum > 0.0:
+        for name in active_components:
+            normalized_weight = float(weights[name]) / active_weight_sum
+            composite_score += float(components[name]["score01"]) * normalized_weight
+        composite_score = _clamp01(composite_score)
 
     report = {
         "benchmark": "reference_suite_v2",
@@ -666,6 +709,8 @@ def run_suite(args: argparse.Namespace) -> dict:
             "detector": args.detector,
             "preset": preset,
             "weights": weights,
+            "active_components": active_components,
+            "skipped_components": sorted(skipped_components),
             "face_mesh_weight": float(FACE_MESH_WEIGHT),
             "head_pose_strength": float(HEAD_POSE_STRENGTH),
         },
@@ -698,6 +743,7 @@ def run_suite(args: argparse.Namespace) -> dict:
         max_composite_drop=args.max_composite_drop,
         max_component_drop=args.max_component_drop,
         fail_on_benchmark_mismatch=not args.allow_incompatible_baseline,
+        skipped_components=skipped_components,
     )
     report["relative_to_baseline"] = _relative_to_baseline(current=report, baseline=baseline)
     report["improvement_targets"] = _derive_improvement_targets(components)
@@ -844,6 +890,16 @@ def main() -> int:
         help="Also write current run to baseline path.",
     )
     parser.add_argument(
+        "--skip-tests",
+        action="store_true",
+        help="Skip test_quality component for faster local iteration (not valid with --enforce-gate).",
+    )
+    parser.add_argument(
+        "--skip-e2e",
+        action="store_true",
+        help="Skip e2e_runtime component for faster local iteration (not valid with --enforce-gate).",
+    )
+    parser.add_argument(
         "--history",
         type=str,
         default=os.path.join("benchmarks", "results", "reference_suite_history.jsonl"),
@@ -867,6 +923,9 @@ def main() -> int:
         help="Low-confidence threshold used by real-world uncertainty evaluation.",
     )
     args = parser.parse_args()
+
+    if args.enforce_gate and (args.skip_tests or args.skip_e2e):
+        parser.error("--enforce-gate cannot be used together with --skip-tests or --skip-e2e")
 
     previous_entry = None
     if not args.no_history:
