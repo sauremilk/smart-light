@@ -2,19 +2,24 @@
 
 import math
 import time
+
 from config import (
-    EMOTION_MAP,
     EMA_MIN_WEIGHT,
+    EMOTION_MAP,
     FALLBACK_LIGHT,
     USE_VALENCE_AROUSAL,
-    VALENCE_AROUSAL_MAP,
+    VA_BRI_HIGH,
+    VA_BRI_LOW,
+    VA_CT_AROUSAL_SHIFT,
+    VA_CT_NEGATIVE,
+    VA_CT_NEUTRAL,
+    VA_CT_POSITIVE,
     VA_HUE_NEGATIVE,
     VA_HUE_NEUTRAL,
     VA_HUE_POSITIVE,
-    VA_BRI_LOW,
-    VA_BRI_HIGH,
-    VA_SAT_LOW,
     VA_SAT_HIGH,
+    VA_SAT_LOW,
+    VALENCE_AROUSAL_MAP,
 )
 
 _TWO_PI = 2.0 * math.pi
@@ -27,11 +32,22 @@ def _lerp(a: float, b: float, t: float) -> float:
 
 
 def valence_arousal_to_light(valence: float, arousal: float) -> dict:
-    """Wandelt Valence (-1..+1) und Arousal (-1..+1) in Hue/Bri/Sat um."""
+    """Wandelt Valence (-1..+1) und Arousal (-1..+1) in Hue/Bri/Sat/ct um.
+
+    Gibt zusaetzlich ``ct`` (Mirek-Farbtemperatur, 153–500) zurueck:
+    negative Valence → warmeres Amber, positive Valence → kuehles Weiss (Fokus).
+    Hohes Arousal verschiebt ct leicht Richtung kuehler (aktivierend).
+    ``ct`` funktioniert auf White-Ambiance- UND Farb-Lampen.
+    """
     if valence >= 0:
         hue = _lerp(VA_HUE_NEUTRAL, VA_HUE_POSITIVE, valence)
+        ct = _lerp(VA_CT_NEUTRAL, VA_CT_POSITIVE, valence)
     else:
         hue = _lerp(VA_HUE_NEUTRAL, VA_HUE_NEGATIVE, -valence)
+        ct = _lerp(VA_CT_NEUTRAL, VA_CT_NEGATIVE, -valence)
+
+    # Hohes Arousal kühlt die Farbtemperatur leicht (aktivierender Effekt)
+    ct -= arousal * VA_CT_AROUSAL_SHIFT
 
     a_norm = (arousal + 1.0) / 2.0
     bri = _lerp(VA_BRI_LOW, VA_BRI_HIGH, a_norm)
@@ -41,6 +57,7 @@ def valence_arousal_to_light(valence: float, arousal: float) -> dict:
         "hue": max(0, min(_HUE_MAX, int(round(hue)))),
         "bri": max(1, min(254, int(round(bri)))),
         "sat": max(0, min(254, int(round(sat)))),
+        "ct": max(153, min(500, int(round(ct)))),
     }
 
 
@@ -79,7 +96,9 @@ def compute_va_from_ema(ema_vector: dict) -> tuple:
 
     Gibt (0.0, 0.0) zurück wenn der Vektor leer oder alle Gewichte unter EMA_MIN_WEIGHT sind.
     """
-    filtered = {e: w for e, w in ema_vector.items() if w >= EMA_MIN_WEIGHT and e in VALENCE_AROUSAL_MAP}
+    filtered = {
+        e: w for e, w in ema_vector.items() if w >= EMA_MIN_WEIGHT and e in VALENCE_AROUSAL_MAP
+    }
     if not filtered:
         return 0.0, 0.0
     total = sum(filtered.values())
@@ -119,8 +138,10 @@ def fuse_modalities(
         if fm_total > 0:
             fm_norm = {e: face_mesh_scores.get(e, 0) / fm_total for e in emotions}
             remaining = 1.0 - face_mesh_weight
-            fused = {e: remaining * fused.get(e, 0) + face_mesh_weight * fm_norm.get(e, 0)
-                     for e in emotions}
+            fused = {
+                e: remaining * fused.get(e, 0) + face_mesh_weight * fm_norm.get(e, 0)
+                for e in emotions
+            }
 
     total = sum(fused.values())
     if total > 0:
@@ -130,6 +151,7 @@ def fuse_modalities(
 
 
 # ──────────── Atemführungs-Entrainment (Breathing Pacer) ──────────────
+
 
 class BreathingPacer:
     """Pulsiert Helligkeit bei 0.1 Hz (6/min) zur parasympathischen Atemfuehrung.
@@ -184,13 +206,14 @@ class BreathingPacer:
 
 # ──────────── Multi-Licht-Szenen-Komposition ──────────────────────────
 
+
 def compose_multi_light_scene(primary: dict, role: str) -> dict:
     """Berechnet lichtrollenspezifische Parameter aus dem Primaerlicht.
 
     Rollen:
       primary – unveraendert
-      accent  – leicht waermer (+1500 Hue), 90% Saettigung
-      ambient – deutlich waermer (+2000 Hue), 60% Saettigung, 70% Helligkeit
+      accent  – leicht waermer (+1500 Hue / +15 Mirek), 90% Saettigung
+      ambient – deutlich waermer (+2000 Hue / +30 Mirek), 60% Saettigung, 70% Helligkeit
     """
     if role == "primary":
         return primary.copy()
@@ -199,9 +222,13 @@ def compose_multi_light_scene(primary: dict, role: str) -> dict:
     if role == "accent":
         result["hue"] = max(0, min(_HUE_MAX, result["hue"] + 1500))
         result["sat"] = max(0, min(254, int(result["sat"] * 0.9)))
+        if "ct" in result:
+            result["ct"] = max(153, min(500, result["ct"] + 15))  # etwas waermer
     elif role == "ambient":
         result["hue"] = max(0, min(_HUE_MAX, result["hue"] + 2000))
         result["sat"] = max(0, min(254, int(result["sat"] * 0.6)))
         result["bri"] = max(1, min(254, int(result["bri"] * 0.7)))
+        if "ct" in result:
+            result["ct"] = max(153, min(500, result["ct"] + 30))  # deutlich waermer
 
     return result

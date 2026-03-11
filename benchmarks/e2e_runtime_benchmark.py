@@ -26,7 +26,9 @@ from typing import Any
 try:
     import psutil
 except Exception as exc:  # pragma: no cover - import error path
-    raise RuntimeError("psutil is required for e2e runtime benchmark. Install with: pip install psutil") from exc
+    raise RuntimeError(
+        "psutil is required for e2e runtime benchmark. Install with: pip install psutil"
+    ) from exc
 
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -138,7 +140,9 @@ def _load_session_entries(path: str) -> list[dict[str, Any]]:
     return rows
 
 
-def _compute_timing_metrics(entries: list[dict[str, Any]], duration_seconds: float) -> dict[str, float]:
+def _compute_timing_metrics(
+    entries: list[dict[str, Any]], duration_seconds: float
+) -> dict[str, float]:
     ts = [float(e.get("timestamp", 0.0)) for e in entries if e.get("timestamp") is not None]
     ts = [t for t in ts if t > 0.0]
     ts.sort()
@@ -170,7 +174,9 @@ def _compute_timing_metrics(entries: list[dict[str, Any]], duration_seconds: flo
     }
 
 
-def _compute_process_metrics(cpu_samples: list[float], rss_samples_mb: list[float], duration_seconds: float) -> dict[str, float]:
+def _compute_process_metrics(
+    cpu_samples: list[float], rss_samples_mb: list[float], duration_seconds: float
+) -> dict[str, float]:
     mem_drift_mb_per_min = 0.0
     if len(rss_samples_mb) >= 2 and duration_seconds > 0:
         mem_drift_mb = float(rss_samples_mb[-1] - rss_samples_mb[0])
@@ -185,7 +191,9 @@ def _compute_process_metrics(cpu_samples: list[float], rss_samples_mb: list[floa
     }
 
 
-def _score_scenario(timing: dict[str, float], proc_metrics: dict[str, float], stable_exit: bool) -> dict[str, Any]:
+def _score_scenario(
+    timing: dict[str, float], proc_metrics: dict[str, float], stable_exit: bool
+) -> dict[str, Any]:
     # Timing scores: 1.0 means no control-loop drops and <=1.0s cadence.
     s_loop = _clamp01(timing["loop_hz"] / 1.0)
     s_drop = 1.0 - _clamp01(timing["drop_rate"])
@@ -226,6 +234,21 @@ def _score_scenario(timing: dict[str, float], proc_metrics: dict[str, float], st
     }
 
 
+def _kill_process_tree(pid: int) -> None:
+    """Forcefully kill a process and all its children (cross-platform via psutil)."""
+    try:
+        parent = psutil.Process(pid)
+        children = parent.children(recursive=True)
+        for child in children:
+            try:
+                child.kill()
+            except psutil.NoSuchProcess:
+                pass
+        parent.kill()
+    except psutil.NoSuchProcess:
+        pass
+
+
 def _run_scenario(
     scenario: Scenario,
     duration_seconds: float,
@@ -233,7 +256,9 @@ def _run_scenario(
     sample_interval_seconds: float,
     python_executable: str,
 ) -> dict[str, Any]:
-    temp_log = tempfile.NamedTemporaryFile(prefix=f"e2e_{scenario.name}_", suffix=".jsonl", delete=False)
+    temp_log = tempfile.NamedTemporaryFile(
+        prefix=f"e2e_{scenario.name}_", suffix=".jsonl", delete=False
+    )
     temp_log.close()
 
     cmd = [
@@ -282,12 +307,21 @@ def _run_scenario(
     finally:
         still_running = proc.poll() is None
         if still_running:
-            proc.terminate()
+            # Graceful shutdown first, then force-kill entire process tree.
             try:
+                proc.terminate()
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=5)
+                pass
+            if proc.poll() is None:
+                try:
+                    _kill_process_tree(proc.pid)
+                except Exception:
+                    proc.kill()
+                try:
+                    proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    pass  # Best-effort; log and continue
 
     ended = time.time()
     runtime_seconds = float(ended - started)

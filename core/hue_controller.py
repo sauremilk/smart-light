@@ -9,6 +9,7 @@ from phue import Bridge
 
 from config import (
     HUE_BRI_QUANT,
+    HUE_CT_QUANT,
     HUE_HUE_QUANT,
     HUE_MIN_UPDATE_INTERVAL,
     HUE_SAT_QUANT,
@@ -96,27 +97,45 @@ class HueController:
         return max(min_value, min(max_value, q))
 
     def apply(self, params: dict, transition: int = TRANSITION_TIME):
-        """Setzt Hue/Bri/Sat auf allen Lampen mit rollenbasierter Anpassung."""
+        """Setzt Lichtparameter auf allen Lampen mit rollenbasierter Anpassung.
+
+        Wenn ``ct`` in *params* vorhanden ist (VA-Modell), werden
+        ``ct`` + ``bri`` gesendet (White-Ambiance- und Farb-Lampen-kompatibel).
+        Andernfalls wird der klassische ``hue`` + ``sat`` + ``bri`` Modus verwendet.
+        """
         now = time.time()
         if now - self._last_sent_ts < HUE_MIN_UPDATE_INTERVAL:
             return
 
-        primary_cmd = {
-            "hue": self._quantize(params["hue"], HUE_HUE_QUANT, 0, 65535),
-            "bri": self._quantize(params["bri"], HUE_BRI_QUANT, 1, 254),
-            "sat": self._quantize(params["sat"], HUE_SAT_QUANT, 0, 254),
-        }
+        ct_mode = "ct" in params
+        if ct_mode:
+            primary_cmd = {
+                "ct": self._quantize(params["ct"], HUE_CT_QUANT, 153, 500),
+                "bri": self._quantize(params["bri"], HUE_BRI_QUANT, 1, 254),
+            }
+        else:
+            primary_cmd = {
+                "hue": self._quantize(params["hue"], HUE_HUE_QUANT, 0, 65535),
+                "bri": self._quantize(params["bri"], HUE_BRI_QUANT, 1, 254),
+                "sat": self._quantize(params["sat"], HUE_SAT_QUANT, 0, 254),
+            }
 
         # Erzeuge ein Cache-Key aus allen Lampen-Parametern
         all_cmds = {}
         for lid in self.lids:
             role = self._roles.get(lid, "primary")
             role_params = compose_multi_light_scene(primary_cmd, role)
-            all_cmds[lid] = {
-                "hue": self._quantize(role_params["hue"], HUE_HUE_QUANT, 0, 65535),
-                "bri": self._quantize(role_params["bri"], HUE_BRI_QUANT, 1, 254),
-                "sat": self._quantize(role_params["sat"], HUE_SAT_QUANT, 0, 254),
-            }
+            if ct_mode:
+                all_cmds[lid] = {
+                    "ct": self._quantize(role_params["ct"], HUE_CT_QUANT, 153, 500),
+                    "bri": self._quantize(role_params["bri"], HUE_BRI_QUANT, 1, 254),
+                }
+            else:
+                all_cmds[lid] = {
+                    "hue": self._quantize(role_params["hue"], HUE_HUE_QUANT, 0, 65535),
+                    "bri": self._quantize(role_params["bri"], HUE_BRI_QUANT, 1, 254),
+                    "sat": self._quantize(role_params["sat"], HUE_SAT_QUANT, 0, 254),
+                }
 
         if all_cmds == self._last_cmd:
             return

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Emotion-gesteuerte Philips Hue Lampe – Hauptprogramm.
 Erkennt Emotionen via Webcam (+ optional Audio, Pose) und steuert Hue-Licht in Echtzeit.
@@ -207,6 +207,10 @@ from config import (
     USE_VALENCE_AROUSAL,
     VA_BRI_HIGH,
     VA_BRI_LOW,
+    VA_CT_AROUSAL_SHIFT,
+    VA_CT_NEGATIVE,
+    VA_CT_NEUTRAL,
+    VA_CT_POSITIVE,
     VA_HUE_NEGATIVE,
     VA_HUE_NEUTRAL,
     VA_HUE_POSITIVE,
@@ -481,570 +485,14 @@ def _pseudonymize_identity(value: str | None, salt: str) -> str | None:
     return hashlib.sha256(raw).hexdigest()[:16]
 
 
-def _build_top3_text(fused_ema: dict, emotion: str, confidence: float) -> str:
-    """Formats top emotion output for the overlay."""
-    if fused_ema:
-        top3 = sorted(fused_ema.items(), key=lambda item: item[1], reverse=True)[:3]
-        return " | ".join(f"{name} {weight:.0%}" for name, weight in top3)
-    return f"{emotion} ({confidence:.0%})"
-
-
-def _build_status_text(
-    fps_display: float,
-    analysis_every_n: int,
-    has_audio: bool,
-    has_pose: bool,
-    has_face_mesh: bool,
-    has_calibration: bool,
-    burst_active: bool,
-    low_fps_guard: bool = False,
-    has_hrv: bool = False,
-    has_breathing: bool = False,
-    low_quality_guardrail: bool = False,
-    has_activity: bool = False,
-    has_pupil_blink: bool = False,
-) -> str:
-    """Builds the status line shown at the bottom of the overlay."""
-    modules = ["Video"]
-    if has_audio:
-        modules.append("Audio")
-    if has_pose:
-        modules.append("Pose")
-    if has_face_mesh:
-        modules.append("FaceMesh")
-    if has_hrv:
-        modules.append("HRV")
-    if has_breathing:
-        modules.append("Breath")
-    if has_activity:
-        modules.append("Activity")
-    if has_pupil_blink:
-        modules.append("Pupil")
-    if has_calibration:
-        modules.append("Cal")
-
-    status = f"FPS:{fps_display:.0f}  1/{analysis_every_n}  [{'+'.join(modules)}]"
-    if burst_active:
-        status += "  BURST"
-    if low_fps_guard:
-        status += "  FPS-GUARD"
-    if low_quality_guardrail:
-        status += "  LOW-Q"
-    return status
-
-
-def _blend_light_params(base: dict, fallback: dict, blend: float) -> dict:
-    """Mischt einen Lichtzustand mit einem neutral-sicheren Fallback-Zustand."""
-    a = max(0.0, min(1.0, float(blend)))
-    b = 1.0 - a
-    return {
-        "hue": int(round(b * float(base["hue"]) + a * float(fallback["hue"]))),
-        "bri": int(round(b * float(base["bri"]) + a * float(fallback["bri"]))),
-        "sat": int(round(b * float(base["sat"]) + a * float(fallback["sat"]))),
-    }
-
-
-def _draw_va_diagram(
-    frame,
-    current_v: float,
-    current_a: float,
-    target_v: float,
-    target_a: float,
-    at_target: bool,
-    size: int = 126,
-    margin: int = 12,
-):
-    """Zeichnet ein klar beschriftetes Valence-Arousal-Diagramm oben rechts.
-
-    Valence (horizontal): links = negativ, rechts = positiv.
-    Arousal  (vertical):  oben  = hoch,    unten  = niedrig.
-    """
-    h, w = frame.shape[:2]
-    ox = w - size - margin  # linke obere Ecke des Diagramms
-    oy = margin
-    title_h = 20
-    legend_h = 32
-    box_x0 = ox - 10
-    box_y0 = oy - 8
-    box_x1 = ox + size + 10
-    box_y1 = oy + size + title_h + legend_h
-
-    # Halbtransparenter Hintergrund
-    overlay_buf = frame.copy()
-    cv2.rectangle(overlay_buf, (box_x0, box_y0), (box_x1, box_y1), (14, 14, 14), -1)
-    cv2.addWeighted(overlay_buf, 0.58, frame, 0.42, 0, frame)
-    cv2.rectangle(frame, (box_x0, box_y0), (box_x1, box_y1), (96, 96, 96), 1)
-
-    # Quadranten subtil einfärben: erleichtert die Orientierung.
-    cx = ox + size // 2
-    cy = oy + size // 2
-    tint = frame.copy()
-    cv2.rectangle(tint, (ox, oy), (cx, cy), (20, 70, 170), -1)  # low valence, high arousal
-    cv2.rectangle(tint, (cx, oy), (ox + size, cy), (50, 150, 80), -1)  # high valence, high arousal
-    cv2.rectangle(tint, (ox, cy), (cx, oy + size), (80, 100, 150), -1)  # low valence, low arousal
-    cv2.rectangle(
-        tint, (cx, cy), (ox + size, oy + size), (70, 120, 95), -1
-    )  # high valence, low arousal
-    cv2.addWeighted(tint, 0.12, frame, 0.88, 0, frame)
-
-    # Achsen (Kreuzlinien, grau)
-    cv2.line(frame, (ox, cy), (ox + size, cy), (110, 110, 110), 1, cv2.LINE_AA)
-    cv2.line(frame, (cx, oy), (cx, oy + size), (110, 110, 110), 1, cv2.LINE_AA)
-    cv2.rectangle(frame, (ox, oy), (ox + size, oy + size), (90, 90, 90), 1)
-
-    def _va_to_px(v: float, a: float):
-        """Wandelt (valence, arousal) in Pixel-Koordinaten im Diagramm um."""
-        px = int(ox + (v + 1.0) / 2.0 * size)
-        py = int(oy + (1.0 - (a + 1.0) / 2.0) * size)
-        return (
-            max(ox, min(ox + size, px)),
-            max(oy, min(oy + size, py)),
-        )
-
-    tgt_px = _va_to_px(target_v, target_a)
-    cur_px = _va_to_px(current_v, current_a)
-
-    # Pfeil IST → SOLL (nur wenn nicht am Ziel)
-    if not at_target:
-        cv2.arrowedLine(frame, cur_px, tgt_px, (30, 200, 255), 2, cv2.LINE_AA, tipLength=0.25)
-
-    # Ziel-Punkt (grün, etwas kleiner)
-    cv2.circle(frame, tgt_px, 5, (60, 220, 90), -1, cv2.LINE_AA)
-
-    # Ist-Punkt (cyan)
-    col_cur = (80, 220, 110) if at_target else (230, 200, 40)
-    cv2.circle(frame, cur_px, 6, col_cur, -1, cv2.LINE_AA)
-
-    # Mini-Labels
-    label_scale = 0.34
-    label_thickness = 1
-    cv2.putText(
-        frame,
-        "IST",
-        (cur_px[0] + 5, cur_px[1] - 5),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        label_scale,
-        col_cur,
-        label_thickness,
-        cv2.LINE_AA,
-    )
-    cv2.putText(
-        frame,
-        "SOLL",
-        (tgt_px[0] + 5, tgt_px[1] - 5),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        label_scale,
-        (60, 220, 90),
-        label_thickness,
-        cv2.LINE_AA,
-    )
-
-    # Titel + Achsenhinweise
-    cv2.putText(
-        frame,
-        "Valence/Arousal",
-        (ox, oy - 4),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.42,
-        (210, 210, 210),
-        1,
-        cv2.LINE_AA,
-    )
-    cv2.putText(
-        frame,
-        "-V",
-        (ox + 2, cy - 4),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.30,
-        (150, 150, 150),
-        1,
-        cv2.LINE_AA,
-    )
-    cv2.putText(
-        frame,
-        "+V",
-        (ox + size - 22, cy - 4),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.30,
-        (150, 150, 150),
-        1,
-        cv2.LINE_AA,
-    )
-    cv2.putText(
-        frame,
-        "+A",
-        (cx + 4, oy + 12),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.30,
-        (150, 150, 150),
-        1,
-        cv2.LINE_AA,
-    )
-    cv2.putText(
-        frame,
-        "-A",
-        (cx + 4, oy + size - 4),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.30,
-        (150, 150, 150),
-        1,
-        cv2.LINE_AA,
-    )
-
-    # Mini-Legende
-    ly = oy + size + 14
-    cv2.circle(frame, (ox + 8, ly), 4, col_cur, -1, cv2.LINE_AA)
-    cv2.putText(
-        frame,
-        "IST",
-        (ox + 16, ly + 4),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.34,
-        (220, 220, 220),
-        1,
-        cv2.LINE_AA,
-    )
-    cv2.circle(frame, (ox + 58, ly), 4, (60, 220, 90), -1, cv2.LINE_AA)
-    cv2.putText(
-        frame,
-        "SOLL",
-        (ox + 66, ly + 4),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.34,
-        (220, 220, 220),
-        1,
-        cv2.LINE_AA,
-    )
-    cv2.putText(
-        frame,
-        "Pfeil = Richtung",
-        (ox, ly + 16),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.32,
-        (165, 165, 165),
-        1,
-        cv2.LINE_AA,
-    )
-
-
-def _draw_overlay(
-    frame,
-    fused_ema: dict,
-    emotion: str,
-    confidence: float,
-    valence: float,
-    arousal: float,
-    trend_v: float,
-    params: dict,
-    transition: int,
-    fps_display: float,
-    analysis_every_n: int,
-    has_audio: bool,
-    has_pose: bool,
-    has_face_mesh: bool,
-    has_calibration: bool,
-    burst_active: bool = False,
-    low_fps_guard: bool = False,
-    low_quality_guardrail: bool = False,
-    quality: float = 0.0,
-    head_pose_conf: float = 1.0,
-    absence_seconds: float = 0.0,
-    lights_off_due_absence: bool = False,
-    hrv_result: dict | None = None,
-    breathing_result: dict | None = None,
-    breathing_rest_bpm: float | None = None,
-    breathing_offset: float = 0.0,
-    reg_info: dict | None = None,
-    circadian_label: str = "",
-    pacer_info: dict | None = None,
-    pupil_dilation: float = 0.0,
-    blink_rate: float = 0.0,
-    activity_result: dict | None = None,
-    torso_lean: float = 0.0,
-    shoulder_drop: float = 0.0,
-    head_tilt: float = 0.0,
-    *,
-    cognitive_state: str = "",
-    cognitive_confidence: float = 0.0,
-    active_mode: str = "",
-    break_event=None,
-    feedback_flash: tuple[bool, str] = (False, ""),
-):
-    """Renders runtime telemetry text on the camera frame."""
-    x0 = 28
-    y0 = 44
-    line_h = 28
-
-    def _draw_text(
-        text: str,
-        y: int,
-        color: tuple[int, int, int],
-        scale: float = 0.58,
-        weight: int = 1,
-    ):
-        # Subtile Kontur + Vordergrund fuer lesbaren, aber ruhigeren Look.
-        cv2.putText(
-            frame,
-            text,
-            (x0, y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            scale,
-            (15, 15, 15),
-            weight + 2,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            frame,
-            text,
-            (x0, y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            scale,
-            color,
-            weight,
-            cv2.LINE_AA,
-        )
-
-    panel_lines = 4
-    if reg_info is not None:
-        panel_lines += 1
-    if circadian_label:
-        panel_lines += 1
-    if pacer_info is not None and pacer_info.get("active"):
-        panel_lines += 1
-    if hrv_result is not None:
-        panel_lines += 1
-    if breathing_result is not None:
-        panel_lines += 1
-        if breathing_rest_bpm is not None:
-            panel_lines += 1
-    if lights_off_due_absence or absence_seconds >= FALLBACK_AFTER_SECONDS:
-        panel_lines += 1
-    if pupil_dilation > 0 or blink_rate > 0:
-        panel_lines += 1
-    if activity_result is not None:
-        panel_lines += 1
-    if torso_lean != 0 or shoulder_drop > 0 or head_tilt != 0:
-        panel_lines += 1
-    if cognitive_state or active_mode:
-        panel_lines += 1
-    if break_event is not None:
-        panel_lines += 1
-    if feedback_flash[0]:
-        panel_lines += 1
-
-    panel_h = panel_lines * line_h + 20
-    panel_w = min(frame.shape[1] - 24, 760)
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (14, 12), (14 + panel_w, 12 + panel_h), (26, 26, 26), -1)
-    cv2.addWeighted(overlay, 0.36, frame, 0.64, 0, frame)
-    cv2.rectangle(frame, (14, 12), (14 + panel_w, 12 + panel_h), (90, 90, 90), 1)
-
-    # Linke Akzentlinie: gruener wenn stabil erkannt, sonst orange.
-    accent = (80, 200, 110) if confidence > 0 else (0, 145, 230)
-    cv2.rectangle(frame, (14, 12), (18, 12 + panel_h), accent, -1)
-
-    color = (120, 255, 150) if confidence > 0 else (60, 185, 255)
-    top3_str = _build_top3_text(fused_ema, emotion, confidence)
-    _draw_text(top3_str, y0, color, scale=0.67, weight=2)
-
-    va_str = f"V:{valence:+.2f} A:{arousal:+.2f} T:{trend_v:+.3f}"
-    va_str += f" Q:{quality:.2f}"
-    _draw_text(va_str, y0 + line_h, (220, 220, 160), scale=0.55, weight=1)
-
-    hpc_str = f"HeadConf:{head_pose_conf:.0%}" if head_pose_conf < 1.0 else ""
-    light_str = f"Hue:{params['hue']} Bri:{params['bri']} Sat:{params['sat']}  Trans:{transition}"
-    if hpc_str:
-        light_str += f"  {hpc_str}"
-    _draw_text(light_str, y0 + line_h * 2, (235, 235, 235), scale=0.54, weight=1)
-
-    status = _build_status_text(
-        fps_display=fps_display,
-        analysis_every_n=analysis_every_n,
-        has_audio=has_audio,
-        has_pose=has_pose,
-        has_face_mesh=has_face_mesh,
-        has_calibration=has_calibration,
-        burst_active=burst_active,
-        low_fps_guard=low_fps_guard,
-        low_quality_guardrail=low_quality_guardrail,
-        has_hrv=hrv_result is not None,
-        has_breathing=breathing_result is not None,
-        has_activity=activity_result is not None,
-        has_pupil_blink=pupil_dilation > 0 or blink_rate > 0,
-    )
-    _draw_text(status, y0 + line_h * 3, (205, 205, 95), scale=0.50, weight=1)
-
-    # Regulationszeile
-    if reg_info is not None:
-        if reg_info["at_target"]:
-            reg_color = (80, 220, 110)  # grün = Ziel erreicht
-        else:
-            reg_color = (40, 185, 255)  # orange = aktive Regulierung
-        blend_pct = reg_info["blend"]
-        reg_label = reg_info["label"]
-        if blend_pct > 0:
-            reg_str = f"Reguliere: {reg_label}  (Blend {blend_pct:.0%})"
-        else:
-            reg_str = f"Reguliere: {reg_label}"
-
-    # Zirkadian-Zeile anzeigen
-    y_next = y0 + line_h * (5 if reg_info is not None else 4)
-    if circadian_label:
-        quality: float = (0.0,)
-        low_quality_guardrail: bool = (False,)
-        circ_str = f"Tageszeit: {circadian_label}"
-        _draw_text(circ_str, y_next, (180, 200, 255), scale=0.50, weight=1)
-        y_next += line_h
-
-    # Atemfuehrungs-Zeile anzeigen
-    if pacer_info is not None and pacer_info.get("active"):
-        fade_pct = pacer_info.get("fade_pct", 0.0)
-        pacer_str = f"Atemfuehrung 6/min ({fade_pct:.0%})"
-        _draw_text(pacer_str, y_next, (160, 255, 220), scale=0.50, weight=1)
-        y_next += line_h
-
-    # HRV-Zeile anzeigen
-    if hrv_result is not None:
-        hr = hrv_result.get("hr_bpm", 0.0)
-        rmssd = hrv_result.get("hrv_rmssd", 0.0)
-        conf = hrv_result.get("confidence", 0.0)
-        face_detected = bool(hrv_result.get("face_detected", True))
-        if not face_detected:
-            hrv_str = "HR: kein Gesicht"
-            hrv_color = (145, 145, 145)
-        elif hr > 0:
-            hrv_str = f"HR:{hr:.0f}bpm  RMSSD:{rmssd:.0f}ms  ({conf:.0%})"
-            hrv_color = (100, 220, 255)
-        else:
-            hrv_str = "HR: wird gemessen..."
-            hrv_color = (145, 145, 145)
-        _draw_text(hrv_str, y_next, hrv_color, scale=0.54, weight=1)
-        y_next += line_h
-
-    # Atemfrequenz-Zeile anzeigen
-    if breathing_result is not None:
-        br = breathing_result.get("br_bpm", 0.0)
-        br_conf = breathing_result.get("confidence", 0.0)
-        if br > 0:
-            br_str = f"Atem:{br:.1f} AZ/min  ({br_conf:.0%})"
-            br_color = (140, 255, 180)  # Hellgrün
-        else:
-            br_str = "Atem: wird gemessen..."
-            br_color = (145, 145, 145)
-        _draw_text(br_str, y_next, br_color, scale=0.54, weight=1)
-        y_next += line_h
-
-        if breathing_rest_bpm is not None:
-            offset_str = f"Atem-Basis:{breathing_rest_bpm:.1f}  Offset:{breathing_offset:+.3f}"
-            _draw_text(offset_str, y_next, (175, 230, 185), scale=0.5, weight=1)
-            y_next += line_h
-
-    # Abwesenheits-Warnung anzeigen
-    if lights_off_due_absence:
-        _draw_text("LICHT AUS - kein Gesicht", y_next, (40, 70, 255), scale=0.6, weight=2)
-        y_next += line_h
-    elif absence_seconds >= FALLBACK_AFTER_SECONDS:
-        remaining = max(0.0, ABSENCE_LIGHT_OFF_SECONDS - absence_seconds)
-        warn_str = f"Kein Gesicht - Licht aus in {remaining:.0f}s"
-        _draw_text(warn_str, y_next, (40, 175, 255), scale=0.54, weight=1)
-        y_next += line_h
-
-    # Pupillen-/Blink-Zeile anzeigen
-    if pupil_dilation > 0 or blink_rate > 0:
-        pb_parts = []
-        if pupil_dilation > 0:
-            pb_parts.append(f"Pupille:{pupil_dilation:.2f}")
-        if blink_rate > 0:
-            pb_parts.append(f"Blink:{blink_rate:.0f}/min")
-        pb_str = "  ".join(pb_parts)
-        pb_color = (200, 180, 255)  # Helles Lila
-        _draw_text(pb_str, y_next, pb_color, scale=0.50, weight=1)
-        y_next += line_h
-
-    # Aktivitaets-Zeile anzeigen
-    if activity_result is not None:
-        kpm = activity_result.get("keys_per_minute", 0.0)
-        cl = activity_result.get("cognitive_load", 0.0)
-        act_str = f"Aktivitaet: {kpm:.0f} Tasten/min  Load:{cl:.0%}"
-        act_color = (255, 200, 140)  # Helles Orange
-        _draw_text(act_str, y_next, act_color, scale=0.50, weight=1)
-        y_next += line_h
-
-    # Erweiterte Pose-Zeile anzeigen
-    if torso_lean != 0 or shoulder_drop > 0 or head_tilt != 0:
-        pose_parts = []
-        if torso_lean != 0:
-            pose_parts.append(f"Lean:{torso_lean:+.2f}")
-        if shoulder_drop > 0:
-            pose_parts.append(f"Drop:{shoulder_drop:.2f}")
-        if head_tilt != 0:
-            pose_parts.append(f"Tilt:{head_tilt:+.2f}")
-        pose_str = "Pose: " + "  ".join(pose_parts)
-        _draw_text(pose_str, y_next, (180, 220, 255), scale=0.50, weight=1)
-        y_next += line_h
-
-    # Kognitiver Zustand + Modus anzeigen
-    if cognitive_state or active_mode:
-        cog_parts = []
-        if cognitive_state:
-            cog_parts.append(f"Zustand:{cognitive_state}({cognitive_confidence:.0%})")
-        if active_mode:
-            cog_parts.append(f"Modus:{active_mode}")
-        cog_str = "  ".join(cog_parts)
-        _cog_colors = {
-            "FOCUS": (255, 220, 100),
-            "FLOW": (100, 255, 200),
-            "FATIGUE": (100, 140, 255),
-            "STRESS": (80, 80, 255),
-            "NEUTRAL": (200, 200, 200),
-        }
-        cog_color = _cog_colors.get(cognitive_state, (200, 200, 200))
-        _draw_text(cog_str, y_next, cog_color, scale=0.50, weight=1)
-        y_next += line_h
-
-    # Pausen-Info anzeigen
-    if break_event is not None:
-        if break_event.break_active:
-            b_dur = break_event.break_duration_s
-            b_str = f"PAUSE ({b_dur:.0f}s)  [b]=beenden"
-            _draw_text(b_str, y_next, (80, 255, 200), scale=0.55, weight=2)
-            y_next += line_h
-        elif break_event.break_recommended:
-            b_str = f"Pause empfohlen: {break_event.reason}  [b]=starten [n]=spaeter"
-            _draw_text(b_str, y_next, (60, 200, 255), scale=0.50, weight=2)
-            y_next += line_h
-        elif break_event.work_duration_s > 0:
-            work_min = break_event.work_duration_s / 60.0
-            pomo_str = (
-                f"  Pomodoro #{break_event.pomodoro_cycle}"
-                if break_event.pomodoro_cycle > 0
-                else ""
-            )
-            b_str = f"Arbeit: {work_min:.0f}min{pomo_str}"
-            _draw_text(b_str, y_next, (180, 180, 180), scale=0.45, weight=1)
-            y_next += line_h
-
-    # Feedback-Flash anzeigen
-    if feedback_flash[0]:
-        if feedback_flash[1] == "positive":
-            fb_str = "Feedback: Positiv"
-            fb_color = (80, 255, 120)
-        else:
-            fb_str = "Feedback: Negativ"
-            fb_color = (80, 120, 255)
-        _draw_text(fb_str, y_next, fb_color, scale=0.55, weight=2)
-        y_next += line_h
-
-    # VA-Diagramm: zeigt Ist-Zustand, Ziel und Regulierungsrichtung (oben rechts)
-    if reg_info is not None:
-        _draw_va_diagram(
-            frame,
-            current_v=reg_info["current_v"],
-            current_a=reg_info["current_a"],
-            target_v=reg_info["target_v"],
-            target_a=reg_info["target_a"],
-            at_target=reg_info["at_target"],
-        )
+# ─── Overlay (ausgelagert in core/overlay.py) ──────────────────────────
+from core.overlay import (  # noqa: E402
+    _blend_light_params,
+    _build_status_text,
+    _build_top3_text,
+    _draw_overlay,
+    _draw_va_diagram,
+)
 
 
 def _circadian_va_to_light(
@@ -1053,12 +501,17 @@ def _circadian_va_to_light(
     hue_neg: int,
     hue_pos: int,
     bri_max: int,
+    ct_neg: int = VA_CT_NEGATIVE,
+    ct_pos: int = VA_CT_POSITIVE,
 ) -> dict:
-    """Wie valence_arousal_to_light, aber mit zirkadianen Hue-/Bri-Overrides."""
+    """Wie valence_arousal_to_light, aber mit zirkadianen Hue-/Bri-/CT-Overrides."""
     if valence >= 0:
         hue = VA_HUE_NEUTRAL + (hue_pos - VA_HUE_NEUTRAL) * valence
+        ct = VA_CT_NEUTRAL + (ct_pos - VA_CT_NEUTRAL) * valence
     else:
         hue = VA_HUE_NEUTRAL + (hue_neg - VA_HUE_NEUTRAL) * (-valence)
+        ct = VA_CT_NEUTRAL + (ct_neg - VA_CT_NEUTRAL) * (-valence)
+    ct -= arousal * VA_CT_AROUSAL_SHIFT
     a_norm = (arousal + 1.0) / 2.0
     bri = VA_BRI_LOW + (min(bri_max, VA_BRI_HIGH) - VA_BRI_LOW) * a_norm
     sat = VA_SAT_LOW + (VA_SAT_HIGH - VA_SAT_LOW) * a_norm
@@ -1066,6 +519,7 @@ def _circadian_va_to_light(
         "hue": max(0, min(65535, int(round(hue)))),
         "bri": max(1, min(254, int(round(bri)))),
         "sat": max(0, min(254, int(round(sat)))),
+        "ct": max(153, min(500, int(round(ct)))),
     }
 
 
@@ -1321,6 +775,8 @@ def main():
     circadian_hue_neg = VA_HUE_NEGATIVE
     circadian_hue_pos = VA_HUE_POSITIVE
     circadian_bri_max = VA_BRI_HIGH
+    circadian_ct_neg = VA_CT_NEGATIVE
+    circadian_ct_pos = VA_CT_POSITIVE
 
     # --- Alexa-Controller (optional) ---
     alexa_controller = None
@@ -1684,6 +1140,8 @@ def main():
                 circadian_hue_neg = cp["hue_negative"]
                 circadian_hue_pos = cp["hue_positive"]
                 circadian_bri_max = cp["bri_max"]
+                circadian_ct_neg = cp.get("ct_negative", VA_CT_NEGATIVE)
+                circadian_ct_pos = cp.get("ct_positive", VA_CT_POSITIVE)
                 circadian_label = cp["label"]
                 last_circadian_update = time.time()
                 log.info(
@@ -1803,6 +1261,8 @@ def main():
                             circadian_hue_neg,
                             circadian_hue_pos,
                             circadian_bri_max,
+                            ct_neg=circadian_ct_neg,
+                            ct_pos=circadian_ct_pos,
                         )
                     else:
                         params = valence_arousal_to_light(reg_v, reg_a)
@@ -2110,7 +1570,7 @@ def main():
                 last_session_log_ts = time.time()
 
             if not args.mock and not args.headless:
-                cv2.imshow("Emotion Light", frame)
+                cv2.imshow("Smart Light", frame)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("q"):
                     break
@@ -2147,7 +1607,7 @@ def main():
                         break_manager.dismiss_break()
                         log.info("Pausenempfehlung abgelehnt.")
                     break
-                if cv2.getWindowProperty("Emotion Light", cv2.WND_PROP_VISIBLE) < 1:
+                if cv2.getWindowProperty("Smart Light", cv2.WND_PROP_VISIBLE) < 1:
                     break
 
     except KeyboardInterrupt:

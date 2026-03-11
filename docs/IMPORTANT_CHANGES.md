@@ -49,3 +49,34 @@ Affected critical paths:
 - `core/onnx_model.py`
 - `core/preprocessing.py`
 
+## 2026-03-11 11:00:15
+<!-- autodoc:441b1a2a3b5f -->
+
+Source: `working-tree` by `copilot-agent`
+
+Affected critical paths:
+- `README.md`
+- `config.py`
+- `core/alexa_controller.py`
+- `core/circadian.py`
+- `core/hue_controller.py`
+- `core/light_mapping.py`
+- `main.py`
+- `requirements.txt`
+
+## 2026-03-11 11:01:51
+<!-- autodoc:3705dd78d272 -->
+
+Source: `staged` by `unknown`
+
+Affected critical paths:
+- `README.md`
+- `config.py`
+- `core/alexa_controller.py`
+- `core/circadian.py`
+- `core/hue_controller.py`
+- `core/light_mapping.py`
+- `core/overlay.py`
+- `main.py`
+- `requirements.txt`
+

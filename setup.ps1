@@ -19,7 +19,7 @@ $ProjectRoot = $PSScriptRoot
 $VenvPath = Join-Path $ProjectRoot ".venv"
 $PythonExe = Join-Path $VenvPath "Scripts\python.exe"
 $PipExe = Join-Path $VenvPath "Scripts\pip.exe"
-$ReqFile = Join-Path $ProjectRoot "requirements.txt"
+$PyprojectFile = Join-Path $ProjectRoot "pyproject.toml"
 $GitHooksDir = Join-Path $ProjectRoot ".githooks"
 
 Write-Host "=== Emotion-Light Setup ===" -ForegroundColor Cyan
@@ -47,8 +47,8 @@ Write-Host "[2/4] Pip upgraden..." -ForegroundColor Green
 if ($LASTEXITCODE -ne 0) { throw "Pip-Upgrade fehlgeschlagen." }
 
 # --- Abhängigkeiten installieren ---
-Write-Host "[3/4] Installiere Abhängigkeiten aus requirements.txt..." -ForegroundColor Green
-& $PipExe install -r $ReqFile
+Write-Host "[3/4] Installiere Abhaengigkeiten aus pyproject.toml..." -ForegroundColor Green
+& $PipExe install -e $ProjectRoot
 if ($LASTEXITCODE -ne 0) { throw "Paket-Installation fehlgeschlagen." }
 
 # --- Syntax-Check ---

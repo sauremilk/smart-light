@@ -1,359 +1,524 @@
-"""Zentrale Konfiguration für das Emotion-Light-System."""
+"""Zentrale Konfiguration fuer das Emotion-Light-System."""
 
-# === Kanonische Emotionsliste (Single Source of Truth) ===
-EMOTIONS: tuple[str, ...] = (
-    "angry",
-    "disgust",
-    "fear",
-    "happy",
-    "sad",
-    "surprise",
-    "neutral",
-)
+from __future__ import annotations
 
-# === Hardware ===
-WEBCAM_INDEX = 0  # USB-Webcam Device-Index (1920x1080 erkannt)
-HUE_BRIDGE_IP = "192.168.178.20"  # IP der Philips Hue Bridge
-HUE_LIGHT_IDS = [
-    2,
-    3,
-    4,
-    6,
-]  # Mick Zimmer 1, Mick Zimmer 3, Mick Zimmer 2, Hue lightstrip 1
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# === Capture ===
-FRAME_WIDTH = 640
-FRAME_HEIGHT = 480
-TARGET_FPS = 24
-CAMERA_BUFFER_SIZE = 1  # Puffergröße der Kamera (1 = immer aktuellster Frame)
-ANALYSIS_EVERY_N_FRAMES = 8  # Nur jeder n-te Frame → weniger CPU-Last
-MIN_ANALYSIS_EVERY_N_FRAMES = 6  # Untere Grenze fuer adaptive Analysefrequenz
-MAX_ANALYSIS_EVERY_N_FRAMES = 20  # Obere Grenze fuer adaptive Analysefrequenz
-ADAPTIVE_ANALYSIS = True  # Analysefrequenz dynamisch an FPS anpassen
-ADAPTIVE_FPS_LOW = 14.0  # Unterhalb: Analyse drosseln
-ADAPTIVE_FPS_HIGH = 22.0  # Oberhalb: Analyse wieder erhoehen
-MIN_RUNTIME_FPS = 10.0  # Zieluntergrenze im Livebetrieb
-LOW_FPS_RECOVERY_HYSTERESIS = 2.0  # Guard erst bei MIN_RUNTIME_FPS + X wieder loesen
-STARTUP_GUARD_DELAY_SECONDS = (
-    4.0  # FPS-Regelung erst nach Initialisierungsphase aktivieren
-)
 
-# === DeepFace ===
-DETECTOR_BACKEND = "opencv"  # opencv ist deutlich leichter und haelt FPS stabiler
-MIN_CONFIDENCE = (
-    0.55  # Mindest-Confidence fuer Emotion (von 0.45 erhoeht → weniger Rauschen)
-)
-SOFT_MIN_CONFIDENCE = (
-    0.30  # Untere Grenze: darunter wird ein Frame als zu unsicher verworfen
-)
-LOW_CONFIDENCE_ALPHA_SCALE = (
-    0.35  # Wie stark unsichere Frames (zwischen SOFT_MIN und MIN) EMA beeinflussen
-)
-ANALYSIS_FRAME_SIZE = 192  # Kleinere Analysebreite fuer stabilere FPS
+class AppSettings(BaseSettings):
+    """Validierte Konfiguration -- Werte per Umgebungsvariable ueberschreibbar.
 
-# === Unsicherheitsbewertung / Guardrails ===
-# Modellqualitaet aus Margin (Top1-Top2) und normierter Entropie.
-UNCERTAINTY_MARGIN_WEIGHT = (
-    0.60  # Hoeher => klare Klassenabstaende werden staerker belohnt
-)
-UNCERTAINTY_ENTROPY_WEIGHT = (
-    0.40  # Hoeher => flache Verteilungen werden staerker abgestraft
-)
-LOW_QUALITY_THRESHOLD = 0.35  # Unterhalb wird konservativer Lichtausgang aktiviert
-LOW_QUALITY_NEUTRAL_BLEND = 0.45  # Anteil neutral-safe Light bei LOW-Q-Guardrail
-LOW_QUALITY_MIN_TRANSITION = 30  # Mindest-Transition (1/10s) bei LOW-Q-Guardrail
+    Beispiel: ``SL_MIN_CONFIDENCE=0.6 python main.py``
+    """
 
-# === Beleuchtungsnormalisierung ===
-USE_COLOR_CONSTANCY = (
-    True  # Gray-World-Korrektur vor CLAHE (bricht Licht→Kamera-Feedback-Loop)
-)
-CLAHE_CLIP_LIMIT = (
-    3.0  # CLAHE Contrast-Limit (0=aus). Normalisiert ungleichmaessige Beleuchtung.
-)
+    model_config = SettingsConfigDict(
+        env_prefix="SL_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-# === Emotion Smoothing (EMA-basiert) ===
-EMA_ALPHA = 0.15  # Basis-Gewicht neuer Messung (0.0–1.0). Wird mit Confidence skaliert.
-# Effectives Alpha = EMA_ALPHA * confidence
-EMA_MIN_WEIGHT = (
-    0.05  # Emotionen unter 5% EMA-Gewicht werden beim Farbblending ignoriert
-)
-FALLBACK_DECAY = (
-    0.08  # Wie schnell EMA-Vektor Richtung neutral driftet wenn kein Gesicht erkannt
-)
+    # === Kanonische Emotionsliste (Single Source of Truth) ===
+    EMOTIONS: tuple[str, ...] = (
+        "angry", "disgust", "fear", "happy", "sad", "surprise", "neutral",
+    )
 
-# === Trend-Analyse ===
-TREND_INFLUENCE = 0.3  # Gewicht des Emotions-Trends auf Transition-Zeit (0.0 = aus)
+    # === Hardware ===
+    WEBCAM_INDEX: int = 0
+    HUE_BRIDGE_IP: str = "192.168.178.20"
+    HUE_LIGHT_IDS: list[int] = [2, 3, 4, 6]
 
-# === Mikro-Expressions-Burst ===
-BURST_CONFIDENCE_DELTA = 0.25  # Schwelle: Abweichung der aktuellen Confidence vom Durchschnitt loest Burst aus
-BURST_FRAMES = 3  # Anzahl aufeinanderfolgender Frames die im Burst analysiert werden
+    # === Capture ===
+    FRAME_WIDTH: int = 640
+    FRAME_HEIGHT: int = 480
+    TARGET_FPS: int = 24
+    CAMERA_BUFFER_SIZE: int = 1
+    ANALYSIS_EVERY_N_FRAMES: int = 8
+    MIN_ANALYSIS_EVERY_N_FRAMES: int = 6
+    MAX_ANALYSIS_EVERY_N_FRAMES: int = 20
+    ADAPTIVE_ANALYSIS: bool = True
+    ADAPTIVE_FPS_LOW: float = 14.0
+    ADAPTIVE_FPS_HIGH: float = 22.0
+    MIN_RUNTIME_FPS: float = 10.0
+    LOW_FPS_RECOVERY_HYSTERESIS: float = 2.0
+    STARTUP_GUARD_DELAY_SECONDS: float = 4.0
 
-# === Hue Transition ===
-TRANSITION_TIME = 20  # In 1/10 Sekunden → 2.0s Fade (sanfterer Uebergang)
-FALLBACK_AFTER_SECONDS = 8  # Sekunden ohne Gesicht → Fallback
-ABSENCE_LIGHT_OFF_SECONDS = (
-    180  # Sekunden ohne Gesicht im Bild → Licht ausschalten (3 Minuten)
-)
-HUE_MIN_UPDATE_INTERVAL = 0.20  # Max. 5 Hue-Updates/s (entlastet Netzwerk + Main-Loop)
-HUE_HUE_QUANT = 512  # Hue-Werte grob rastern, um Update-Flut zu vermeiden
-HUE_BRI_QUANT = 8  # Helligkeit rastern
-HUE_SAT_QUANT = 8  # Saettigung rastern
+    # === DeepFace ===
+    DETECTOR_BACKEND: str = "opencv"
+    MIN_CONFIDENCE: float = 0.55
+    SOFT_MIN_CONFIDENCE: float = 0.30
+    LOW_CONFIDENCE_ALPHA_SCALE: float = 0.35
+    ANALYSIS_FRAME_SIZE: int = 192
 
-# === Valence-Arousal-Modell ===
-USE_VALENCE_AROUSAL = (
-    True  # True: Licht ueber Valence/Arousal steuern. False: direktes Emotion-Mapping.
-)
+    # === Unsicherheitsbewertung / Guardrails ===
+    UNCERTAINTY_MARGIN_WEIGHT: float = 0.60
+    UNCERTAINTY_ENTROPY_WEIGHT: float = 0.40
+    LOW_QUALITY_THRESHOLD: float = 0.35
+    LOW_QUALITY_NEUTRAL_BLEND: float = 0.45
+    LOW_QUALITY_MIN_TRANSITION: int = 30
 
-VALENCE_AROUSAL_MAP = {
-    "happy": {"valence": 0.9, "arousal": 0.5},
-    "sad": {"valence": -0.8, "arousal": -0.7},
-    "angry": {"valence": -0.9, "arousal": 1.0},
-    "fear": {"valence": -0.7, "arousal": 0.8},
-    "surprise": {"valence": 0.3, "arousal": 0.9},
-    "disgust": {"valence": -0.6, "arousal": 0.2},
-    "neutral": {"valence": 0.0, "arousal": 0.0},
-}
+    # === Beleuchtungsnormalisierung ===
+    USE_COLOR_CONSTANCY: bool = True
+    CLAHE_CLIP_LIMIT: float = 3.0
 
-# Valence/Arousal → Hue-Bereich (fuer Interpolation)
-# Wissenschaftliche Korrektur: Blaulicht aktiviert Melanopsin → verstärkt Kortisol
-# bei negativen Emotionen kontraproduktiv.  Warm-Amber (2200 K) beruhigt nachweislich.
-VA_HUE_NEGATIVE = 9000  # Warmes Bernstein / Amber (statt Blau) bei negativer Valence
-VA_HUE_NEUTRAL = 14000  # Warmweiss (neutrale Valence)
-VA_HUE_POSITIVE = 14500  # Helles Warm-Weiss ~3500 K (Fokus-optimiert)
-VA_BRI_LOW = 70  # Helligkeit bei niedrigem Arousal (ruhiger)
-VA_BRI_HIGH = 240  # Helligkeit bei hohem Arousal
-VA_SAT_LOW = 50  # Saettigung bei niedrigem Arousal (saubereres Amber)
-VA_SAT_HIGH = 240  # Saettigung bei hohem Arousal
+    # === Emotion Smoothing (EMA-basiert) ===
+    EMA_ALPHA: float = 0.15
+    EMA_MIN_WEIGHT: float = 0.05
+    FALLBACK_DECAY: float = 0.08
 
-# === Emotion → Hue Mapping (Fallback wenn USE_VALENCE_AROUSAL = False) ===
-# Hue: 0–65535 (Farbkreis), Bri: 1–254, Sat: 0–254
-# Korrigiert: negative Emotionen verwenden Warm-Amber statt Blau
-EMOTION_MAP = {
-    "happy": {"hue": 14500, "bri": 200, "sat": 200},
-    "sad": {"hue": 8500, "bri": 100, "sat": 120},
-    "angry": {"hue": 65535, "bri": 220, "sat": 254},
-    "fear": {"hue": 9000, "bri": 110, "sat": 140},
-    "surprise": {"hue": 10000, "bri": 254, "sat": 230},
-    "disgust": {"hue": 10500, "bri": 120, "sat": 160},
-    "neutral": {"hue": 14000, "bri": 160, "sat": 120},
-}
+    # === Trend-Analyse ===
+    TREND_INFLUENCE: float = 0.3
 
-# Fallback wenn kein Gesicht erkannt wird
-FALLBACK_LIGHT = {"hue": 14000, "bri": 140, "sat": 80}
+    # === Mikro-Expressions-Burst ===
+    BURST_CONFIDENCE_DELTA: float = 0.25
+    BURST_FRAMES: int = 3
 
-# === Audio-Emotion ===
-USE_AUDIO = True  # Audio-Emotionserkennung aktivieren
-AUDIO_DEVICE_INDEX = None  # None = System-Standard-Mikrofon
-AUDIO_SAMPLE_RATE = 16000  # Abtastrate fuer Audio
-AUDIO_CHUNK_SECONDS = 2.0  # Laenge eines Audio-Chunks fuer Analyse
-AUDIO_INFERENCE_COOLDOWN = 1.0  # Pause nach jeder Audio-Inferenz (entlastet CPU/FPS)
-AUDIO_EMA_ALPHA = 0.12  # EMA-Alpha fuer Audio (etwas traeger als Video)
-AUDIO_WEIGHT = 0.35  # Fusion: 35% Audio, 65% Video
-AUDIO_SNR_DB_FLOOR = 0.0  # Unterhalb davon gilt Audio als stark verrauscht
-AUDIO_SNR_DB_CEIL = 20.0  # Ab hier gilt Audio als robust/sauber
-AUDIO_DYNAMIC_MIN_FACTOR = (
-    0.20  # Minimaler Anteil vom AUDIO_WEIGHT bei schlechter Qualitaet
-)
-AUDIO_DYNAMIC_QUALITY_EXPONENT = 1.2  # >1 bestraft mittlere Qualitaet etwas staerker
+    # === Hue Transition ===
+    TRANSITION_TIME: int = 20
+    FALLBACK_AFTER_SECONDS: int = 8
+    ABSENCE_LIGHT_OFF_SECONDS: int = 180
+    HUE_MIN_UPDATE_INTERVAL: float = 0.20
+    HUE_HUE_QUANT: int = 512
+    HUE_BRI_QUANT: int = 8
+    HUE_SAT_QUANT: int = 8
+    HUE_CT_QUANT: int = 4
 
-# === Koerpersprache (MediaPipe Pose) ===
-USE_POSE = True  # Pose-Analyse aktivieren
-POSE_WEIGHT = 0.2  # Gewicht des Pose-Arousal-Offsets
-POSE_FRAME_SIZE = 256  # Pose-Eingangsbreite (kleiner = schneller)
+    # === Valence-Arousal-Modell ===
+    USE_VALENCE_AROUSAL: bool = True
 
-# === Face Mesh + Action Units ===
-USE_FACE_MESH = True  # MediaPipe Face Mesh fuer Action-Unit-basierte Emotionserkennung
-FACE_MESH_WEIGHT = 0.15  # Gewicht der Face-Mesh-Erkennung in der Fusion (0.0–1.0)
-FACE_MESH_FRAME_SIZE = 256  # Eingabebreite fuer Face Mesh
-HEAD_POSE_PENALTY_YAW = 30.0  # Ab diesem Yaw (Grad) wird Confidence reduziert
-HEAD_POSE_PENALTY_PITCH = 25.0  # Ab diesem Pitch (Grad) wird Confidence reduziert
-HEAD_POSE_MAX_ATTENUATION = 0.5  # Minimaler Confidence-Faktor bei extremer Kopfdrehung
-USE_HEAD_POSE_CONFIDENCE = True  # Kopfpose-Faktor auf Video-Confidence anwenden
-HEAD_POSE_CONFIDENCE_STRENGTH = 0.35  # 0.0=aus, 1.0=voller Faktor
+    VALENCE_AROUSAL_MAP: dict[str, dict[str, float]] = {
+        "happy": {"valence": 0.9, "arousal": 0.5},
+        "sad": {"valence": -0.8, "arousal": -0.7},
+        "angry": {"valence": -0.9, "arousal": 1.0},
+        "fear": {"valence": -0.7, "arousal": 0.8},
+        "surprise": {"valence": 0.3, "arousal": 0.9},
+        "disgust": {"valence": -0.6, "arousal": 0.2},
+        "neutral": {"valence": 0.0, "arousal": 0.0},
+    }
 
-# === HRV via rPPG ===
-USE_HRV = True  # Herzfrequenz- und HRV-Messung via Webcam aktivieren
-HRV_WINDOW_SECONDS = 30.0  # Rollendes Zeitfenster für HRV-Berechnung in Sekunden
-HRV_FRAME_INTERVAL = 3  # Alle N Frames einen Frame an den HRV-Analyzer schicken
-HRV_AROUSAL_INFLUENCE = 0.15  # Gewicht der HR auf den Arousal-Offset (0.0 = aus)
-# Formel: offset = (hr_bpm - 72) / 72 * HRV_AROUSAL_INFLUENCE
-HRV_MIN_CONFIDENCE = 0.45  # Mindest-Confidence fuer HRV-Offset im Licht
-HRV_BASELINE_BPM = 72.0  # Start-Baseline fuer Ruhepuls
-HRV_BASELINE_ADAPT_ALPHA = 0.015  # Langsame Nachfuehrung der HR-Baseline im Betrieb
-HRV_OFFSET_EMA_ALPHA = 0.18  # Glaettung des HRV-Arousal-Offsets
-HRV_OFFSET_CLAMP = 0.18  # Harte Begrenzung des HRV-Offsets (symmetrisch)
+    VA_HUE_NEGATIVE: int = 9000
+    VA_HUE_NEUTRAL: int = 14000
+    VA_HUE_POSITIVE: int = 14500
+    VA_BRI_LOW: int = 70
+    VA_BRI_HIGH: int = 240
+    VA_SAT_LOW: int = 50
+    VA_SAT_HIGH: int = 240
 
-# === Atemfrequenz via Webcam ===
-USE_BREATHING = True  # Atemfrequenz-Erkennung via Schulterbewegung aktivieren
-BREATHING_WINDOW_SECONDS = (
-    30.0  # Rollendes Zeitfenster in Sekunden (mind. 2–3 Atemzyklen)
-)
-BREATHING_FRAME_INTERVAL = (
-    6  # Alle N Frames einen Frame schicken (24fps → ~4 Hz Abtastrate)
-)
-BREATHING_AROUSAL_INFLUENCE = 0.12  # Gewicht der Atemfrequenz auf Arousal (0.0 = aus)
-# Formel: offset = (br_bpm - 15) / 15 * BREATHING_AROUSAL_INFLUENCE
-# Langsames Atmen → −Arousal (ruhigeres Licht), schnelles → +Arousal
-BREATHING_MIN_CONFIDENCE = 0.5  # Mindest-Confidence fuer Atmungssteuerung
-BREATHING_BASELINE_SECONDS = 90  # Dauer der initialen Ruhe-Baseline in Sekunden
-BREATHING_BASELINE_ADAPT_ALPHA = 0.02  # Langsame Nachfuehrung der Baseline im Betrieb
-BREATHING_OFFSET_EMA_ALPHA = 0.15  # Glaettung fuer Atem-Arousal-Offset
-BREATHING_OFFSET_CLAMP = 0.2  # Harte Begrenzung des Atem-Offsets (symmetrisch)
-BREATHING_TRANSITION_INFLUENCE = (
-    0.8  # Positives Offset beschleunigt, negatives verlangsamt Transition
-)
+    VA_CT_NEGATIVE: int = 450
+    VA_CT_NEUTRAL: int = 333
+    VA_CT_POSITIVE: int = 222
+    VA_CT_AROUSAL_SHIFT: int = 30
 
-# === Adaptive Regulation ===
-# Das Licht steuert NICHT mehr nur den erkannten Ist-Zustand, sondern nudgt ihn adaptiv
-# Richtung eines therapeutischen Zielzustands (positiv + ruhig).
-ADAPTIVE_REGULATION = (
-    True  # True: adaptiver Modus aktiv; False: klassischer Spiegel-Modus
-)
-ADAPTIVE_TARGET_VALENCE = 0.65  # Ziel-Valence (Fokus: positiv, aber nicht euphorisch)
-ADAPTIVE_TARGET_AROUSAL = 0.35  # Ziel-Arousal (leicht erhoeht fuer Konzentration)
-ADAPTIVE_BLEND_STRENGTH = 0.45  # Startstärke: 45% Richtung Ziel, 55% Ist-Zustand
-ADAPTIVE_BLEND_MAX = 0.80  # Obere Grenze der Blend-Stärke (Eskalation)
-ADAPTIVE_PROGRESS_TIMEOUT = (
-    30.0  # Sekunden ohne Verbesserung → blend um ESCALATION erhöhen
-)
-ADAPTIVE_BLEND_ESCALATION = 0.10  # Schrittweite je Eskalationsstufe
-ADAPTIVE_AT_TARGET_THRESHOLD = (
-    0.18  # Distanz zum Ziel < Schwelle → "Stabil", kein Eingriff
-)
+    # === Emotion -> Hue Mapping (Fallback) ===
+    EMOTION_MAP: dict[str, dict[str, int]] = {
+        "happy": {"hue": 14500, "bri": 200, "sat": 200},
+        "sad": {"hue": 8500, "bri": 100, "sat": 120},
+        "angry": {"hue": 65535, "bri": 220, "sat": 254},
+        "fear": {"hue": 9000, "bri": 110, "sat": 140},
+        "surprise": {"hue": 10000, "bri": 254, "sat": 230},
+        "disgust": {"hue": 10500, "bri": 120, "sat": 160},
+        "neutral": {"hue": 14000, "bri": 160, "sat": 120},
+    }
 
-# === Nutzer-Kalibrierung ===
-CALIBRATION_FILE = "calibration_default.json"  # Pfad zur Kalibrierungsdatei
-CALIBRATION_SECONDS_PER_EMOTION = 10  # Sekunden pro Emotion bei Kalibrierung
+    FALLBACK_LIGHT: dict[str, int] = {"hue": 14000, "bri": 140, "sat": 80, "ct": 333}
 
-# === Zirkadianes Licht-Modell ===
-USE_CIRCADIAN = True  # Tageszeit-adaptives Zielprofil aktivieren
-CIRCADIAN_UPDATE_INTERVAL = 300  # Sekunden zwischen Zirkadian-Updates (5 Minuten)
+    # === Audio-Emotion ===
+    USE_AUDIO: bool = True
+    AUDIO_DEVICE_INDEX: int | None = None
+    AUDIO_SAMPLE_RATE: int = 16000
+    AUDIO_CHUNK_SECONDS: float = 2.0
+    AUDIO_INFERENCE_COOLDOWN: float = 1.0
+    AUDIO_EMA_ALPHA: float = 0.12
+    AUDIO_WEIGHT: float = 0.35
+    AUDIO_SNR_DB_FLOOR: float = 0.0
+    AUDIO_SNR_DB_CEIL: float = 20.0
+    AUDIO_DYNAMIC_MIN_FACTOR: float = 0.20
+    AUDIO_DYNAMIC_QUALITY_EXPONENT: float = 1.2
 
-# === Atemfuehrungs-Entrainment ===
-USE_BREATHING_PACER = True  # Licht-Pulsation zur Atemfuehrung aktivieren
-BREATHING_PACER_BPM = 6.0  # Ziel-Atemfrequenz (0.1 Hz Resonanzfrequenz)
-BREATHING_PACER_AMPLITUDE = 0.08  # ±8% Helligkeits-Modulation
-BREATHING_PACER_FADE_IN = 30.0  # Sekunden zum langsamen Einblenden
-BREATHING_PACER_BR_THRESHOLD = 18.0  # Pacer aktiviert wenn BR > dieser Wert
+    # === Koerpersprache (MediaPipe Pose) ===
+    USE_POSE: bool = True
+    POSE_WEIGHT: float = 0.2
+    POSE_FRAME_SIZE: int = 256
 
-# === Multi-Licht-Szenen-Komposition ===
-# Rollenbasierte Lichtsteuerung: verschiedene Lichter erhalten angepasste Parameter
-HUE_LIGHT_ROLES = {
-    2: "primary",  # Mick Zimmer 1 – Hauptfarbe (unveraendert)
-    3: "accent",  # Mick Zimmer 3 – Akzent (waermer, leicht gedaempfte Saettigung)
-    4: "accent",  # Mick Zimmer 2 – Akzent
-    6: "ambient",  # Hue Lightstrip – Ambient (deutlich waermer, gedaempft)
-}
+    # === Face Mesh + Action Units ===
+    USE_FACE_MESH: bool = True
+    FACE_MESH_WEIGHT: float = 0.15
+    FACE_MESH_FRAME_SIZE: int = 256
+    HEAD_POSE_PENALTY_YAW: float = 30.0
+    HEAD_POSE_PENALTY_PITCH: float = 25.0
+    HEAD_POSE_MAX_ATTENUATION: float = 0.5
+    USE_HEAD_POSE_CONFIDENCE: bool = True
+    HEAD_POSE_CONFIDENCE_STRENGTH: float = 0.35
 
-# === Vorausschauende Intervention ===
-PREDICTIVE_TREND_THRESHOLD = -0.04  # Valence-Trend-Schwelle fuer Abwaertserkennung
-PREDICTIVE_TRIGGER_SECONDS = 4.0  # Sekunden konstanter Abwaertstrend bis Eingriff
-PREDICTIVE_BOOST_FACTOR = 1.5  # Blend-Verstaerkungsfaktor
-PREDICTIVE_BOOST_DURATION = 15.0  # Dauer des verstaerkten Blend in Sekunden
+    # === HRV via rPPG ===
+    USE_HRV: bool = True
+    HRV_WINDOW_SECONDS: float = 30.0
+    HRV_FRAME_INTERVAL: int = 3
+    HRV_AROUSAL_INFLUENCE: float = 0.15
+    HRV_MIN_CONFIDENCE: float = 0.45
+    HRV_BASELINE_BPM: float = 72.0
+    HRV_BASELINE_ADAPT_ALPHA: float = 0.015
+    HRV_OFFSET_EMA_ALPHA: float = 0.18
+    HRV_OFFSET_CLAMP: float = 0.18
 
-# === Pupillen- und Blink-Analyse (aus FaceMesh) ===
-USE_PUPIL_BLINK = True  # Pupillengroesse und Blink-Rate aus Iris-Landmarks
-PUPIL_AROUSAL_INFLUENCE = 0.10  # Gewicht der Pupillengroesse auf Arousal-Offset
-PUPIL_DILATION_BASELINE = 0.45  # Ruhe-Baseline der relativen Pupillengroesse
-PUPIL_OFFSET_CLAMP = 0.12  # Harte Begrenzung des Pupillen-Offsets
-BLINK_RATE_FATIGUE_THRESHOLD = 25.0  # Blinks/Min oberhalb = Muedigkeitsindikator
-BLINK_RATE_FOCUS_THRESHOLD = 10.0  # Blinks/Min unterhalb = Fokus-Indikator
-BLINK_VALENCE_INFLUENCE = 0.05  # Wie stark Blink-Rate Valence beeinflusst
+    # === Atemfrequenz via Webcam ===
+    USE_BREATHING: bool = True
+    BREATHING_WINDOW_SECONDS: float = 30.0
+    BREATHING_FRAME_INTERVAL: int = 6
+    BREATHING_AROUSAL_INFLUENCE: float = 0.12
+    BREATHING_MIN_CONFIDENCE: float = 0.5
+    BREATHING_BASELINE_SECONDS: int = 90
+    BREATHING_BASELINE_ADAPT_ALPHA: float = 0.02
+    BREATHING_OFFSET_EMA_ALPHA: float = 0.15
+    BREATHING_OFFSET_CLAMP: float = 0.2
+    BREATHING_TRANSITION_INFLUENCE: float = 0.8
 
-# === Erweiterte Koerpersprache-Analyse ===
-USE_EXTENDED_POSE = True  # Erweiterte Pose-Signale nutzen
-TORSO_LEAN_AROUSAL_INFLUENCE = 0.08  # Vorneigung → Arousal (+vorne = +Arousal)
-SHOULDER_DROP_VALENCE_INFLUENCE = 0.06  # Schulterabsenkung → Valence (-)
-HEAD_TILT_RELAXATION_THRESHOLD = 0.15  # Ab dieser Seitneigung: Entspannungsindikator
+    # === Adaptive Regulation ===
+    ADAPTIVE_REGULATION: bool = True
+    ADAPTIVE_TARGET_VALENCE: float = 0.65
+    ADAPTIVE_TARGET_AROUSAL: float = 0.35
+    ADAPTIVE_BLEND_STRENGTH: float = 0.45
+    ADAPTIVE_BLEND_MAX: float = 0.80
+    ADAPTIVE_PROGRESS_TIMEOUT: float = 30.0
+    ADAPTIVE_BLEND_ESCALATION: float = 0.10
+    ADAPTIVE_AT_TARGET_THRESHOLD: float = 0.18
 
-# === Tastatur/Maus-Aktivitaets-Monitoring ===
-USE_ACTIVITY_MONITOR = True  # Passives Input-Monitoring aktivieren
-ACTIVITY_AROUSAL_INFLUENCE = 0.10  # Wie stark kognitive Last auf Arousal wirkt
-ACTIVITY_TRANSITION_INFLUENCE = 0.4  # Hohe Aktivitaet → schnellere Licht-Transition
+    # === Nutzer-Kalibrierung ===
+    CALIBRATION_FILE: str = "calibration_default.json"
+    CALIBRATION_SECONDS_PER_EMOTION: int = 10
 
-# === Prosodische Stimm-Analyse ===
-USE_PROSODIC = True  # Prosodische Merkmale aus Audio extrahieren
-PROSODIC_PITCH_STRESS_HZ = 200.0  # Mittlere F0 ueber diesem Wert = erhoehter Stress
-PROSODIC_PITCH_CALM_HZ = 120.0  # Mittlere F0 unter diesem Wert = ruhiger Zustand
-PROSODIC_AROUSAL_INFLUENCE = 0.08  # Gewicht prosodischer Merkmale auf Arousal
-PROSODIC_SPEECH_RATE_HIGH = 6.0  # Onsets/s ueber diesem Wert = schnelles Sprechen
-PROSODIC_SPEECH_RATE_LOW = 2.0  # Onsets/s unter diesem Wert = langsames Sprechen
+    # === Zirkadianes Licht-Modell ===
+    USE_CIRCADIAN: bool = True
+    CIRCADIAN_UPDATE_INTERVAL: int = 300
 
-# === Kognitiver Zustandsklassifikator ===
-USE_COGNITIVE_CLASSIFIER = True  # Kognitive Zustandserkennung aktivieren
-COGNITIVE_STABILITY_WINDOW = 30.0  # Sekunden Stabilitaetsfenster fuer Zustandswechsel
+    # === Atemfuehrungs-Entrainment ===
+    USE_BREATHING_PACER: bool = True
+    BREATHING_PACER_BPM: float = 6.0
+    BREATHING_PACER_AMPLITUDE: float = 0.08
+    BREATHING_PACER_FADE_IN: float = 30.0
+    BREATHING_PACER_BR_THRESHOLD: float = 18.0
 
-# === Modus-System ===
-USE_MODE_SYSTEM = True  # Zielgerichtete Optimierungsmodi aktivieren
-DEFAULT_MODE = "AUTO"  # Startmodus: AUTO | FOCUS | ENERGY | RELAX | RECOVERY
-MODE_HYSTERESIS_S = 15.0  # Sekunden bis automatischer Moduswechsel
+    # === Multi-Licht-Szenen-Komposition ===
+    HUE_LIGHT_ROLES: dict[int, str] = {
+        2: "primary",
+        3: "accent",
+        4: "accent",
+        6: "ambient",
+    }
 
-# === Pausen-Manager ===
-USE_BREAK_MANAGER = True  # Pausenempfehlungen aktivieren
-BREAK_MAX_WORK_MINUTES = 50.0  # Maximale Arbeitszeit ohne Pause
-BREAK_FATIGUE_TRIGGER_S = 120.0  # Sekunden Muedigkeit bis Pause empfohlen
-BREAK_MIN_MINUTES = 5.0  # Mindest-Pausendauer
-BREAK_POMODORO_ENABLED = False  # Pomodoro-Modus aktivieren
-BREAK_POMODORO_WORK_MINUTES = 25.0  # Arbeitsphase Pomodoro
-BREAK_POMODORO_BREAK_MINUTES = 5.0  # Pausenphase Pomodoro
-BREAK_POMODORO_LONG_BREAK_MINUTES = 15.0  # Lange Pause Pomodoro
-BREAK_POMODORO_LONG_BREAK_AFTER = 4  # Zyklen bis lange Pause
+    # === Vorausschauende Intervention ===
+    PREDICTIVE_TREND_THRESHOLD: float = -0.04
+    PREDICTIVE_TRIGGER_SECONDS: float = 4.0
+    PREDICTIVE_BOOST_FACTOR: float = 1.5
+    PREDICTIVE_BOOST_DURATION: float = 15.0
 
-# === Feedback-System ===
-USE_FEEDBACK = True  # Benutzer-Feedback via Tastendruck aktivieren
-FEEDBACK_COOLDOWN_S = 3.0  # Sekunden Cooldown zwischen Feedback-Aktionen
+    # === Pupillen- und Blink-Analyse ===
+    USE_PUPIL_BLINK: bool = True
+    PUPIL_AROUSAL_INFLUENCE: float = 0.10
+    PUPIL_DILATION_BASELINE: float = 0.45
+    PUPIL_OFFSET_CLAMP: float = 0.12
+    BLINK_RATE_FATIGUE_THRESHOLD: float = 25.0
+    BLINK_RATE_FOCUS_THRESHOLD: float = 10.0
+    BLINK_VALENCE_INFLUENCE: float = 0.05
 
-# === Agentic Face Fine-Tune ===
-USE_FACE_FINETUNE_ONNX = True
-FACE_FINETUNE_ONNX_PATH = "artifacts/face_finetune/face_finetuned.onnx"
+    # === Erweiterte Koerpersprache-Analyse ===
+    USE_EXTENDED_POSE: bool = True
+    TORSO_LEAN_AROUSAL_INFLUENCE: float = 0.08
+    SHOULDER_DROP_VALENCE_INFLUENCE: float = 0.06
+    HEAD_TILT_RELAXATION_THRESHOLD: float = 0.15
 
-# === Alexa-Steuerung (optional) ===
-# Steuert Amazon Echo basierend auf erkannter Emotion:
-# Musik passend zur Stimmung abspielen und Lautstaerke anpassen.
-# Zugangsdaten NICHT hier eintragen – stattdessen in config_local.py (nicht versioniert).
-USE_ALEXA = False  # True: Alexa-Steuerung aktivieren
-ALEXA_EMAIL = ""  # Amazon-Konto E-Mail (in config_local.py setzen)
-ALEXA_PASSWORD = ""  # Amazon-Konto Passwort (in config_local.py setzen)
-ALEXA_DEVICE_NAME = ""  # Geraetename exakt wie in der Alexa-App
-ALEXA_AMAZON_URL = "amazon.de"  # Laender-Suffix (amazon.de, amazon.com, ...)
-ALEXA_COOLDOWN_SECONDS = 30.0  # Mindestabstand zwischen Alexa-Aktionen (Sekunden)
-ALEXA_MUSIC_PROVIDER = "AMAZON_MUSIC"  # AMAZON_MUSIC | TUNEIN | SPOTIFY
-ALEXA_VOLUME_CONTROL = True  # Lautstaerke ebenfalls emotion-adaptiv anpassen
+    # === Tastatur/Maus-Aktivitaets-Monitoring ===
+    USE_ACTIVITY_MONITOR: bool = True
+    ACTIVITY_AROUSAL_INFLUENCE: float = 0.10
+    ACTIVITY_TRANSITION_INFLUENCE: float = 0.4
 
-# Stimmungskategorie → Amazon-Music-Suchanfrage
-# Schluessel: energetic_positive | calm_positive | calm_negative |
-#             energetic_negative | neutral
-ALEXA_MOOD_PLAYLISTS = {
-    "energetic_positive": "upbeat happy pop music",
-    "calm_positive": "focus concentration background music",
-    "calm_negative": "calming relaxing ambient music",
-    "energetic_negative": "stress relief calming music",
-    "neutral": "lo-fi background music",
-}
+    # === Prosodische Stimm-Analyse ===
+    USE_PROSODIC: bool = True
+    PROSODIC_PITCH_STRESS_HZ: float = 200.0
+    PROSODIC_PITCH_CALM_HZ: float = 120.0
+    PROSODIC_AROUSAL_INFLUENCE: float = 0.08
+    PROSODIC_SPEECH_RATE_HIGH: float = 6.0
+    PROSODIC_SPEECH_RATE_LOW: float = 2.0
+
+    # === Kognitiver Zustandsklassifikator ===
+    USE_COGNITIVE_CLASSIFIER: bool = True
+    COGNITIVE_STABILITY_WINDOW: float = 30.0
+
+    # === Modus-System ===
+    USE_MODE_SYSTEM: bool = True
+    DEFAULT_MODE: str = "AUTO"
+    MODE_HYSTERESIS_S: float = 15.0
+
+    # === Pausen-Manager ===
+    USE_BREAK_MANAGER: bool = True
+    BREAK_MAX_WORK_MINUTES: float = 50.0
+    BREAK_FATIGUE_TRIGGER_S: float = 120.0
+    BREAK_MIN_MINUTES: float = 5.0
+    BREAK_POMODORO_ENABLED: bool = False
+    BREAK_POMODORO_WORK_MINUTES: float = 25.0
+    BREAK_POMODORO_BREAK_MINUTES: float = 5.0
+    BREAK_POMODORO_LONG_BREAK_MINUTES: float = 15.0
+    BREAK_POMODORO_LONG_BREAK_AFTER: int = 4
+
+    # === Feedback-System ===
+    USE_FEEDBACK: bool = True
+    FEEDBACK_COOLDOWN_S: float = 3.0
+
+    # === Agentic Face Fine-Tune ===
+    USE_FACE_FINETUNE_ONNX: bool = True
+    FACE_FINETUNE_ONNX_PATH: str = "artifacts/face_finetune/face_finetuned.onnx"
+
+    # === Alexa-Steuerung ===
+    USE_ALEXA: bool = False
+    ALEXA_EMAIL: str = ""
+    ALEXA_PASSWORD: str = ""
+    ALEXA_DEVICE_NAME: str = ""
+    ALEXA_AMAZON_URL: str = "amazon.de"
+    ALEXA_COOLDOWN_SECONDS: float = 30.0
+    ALEXA_MUSIC_PROVIDER: str = "AMAZON_MUSIC"
+    ALEXA_VOLUME_CONTROL: bool = True
+    ALEXA_MOOD_PLAYLISTS: dict[str, str] = {
+        "energetic_positive": "upbeat happy pop music",
+        "calm_positive": "focus concentration background music",
+        "calm_negative": "calming relaxing ambient music",
+        "energetic_negative": "stress relief calming music",
+        "neutral": "lo-fi background music",
+    }
+
+    # --- Validatoren ---
+
+    @field_validator("EMA_ALPHA", "AUDIO_EMA_ALPHA")
+    @classmethod
+    def _alpha_range(cls, v: float) -> float:
+        if not 0.0 < v < 1.0:
+            raise ValueError(f"Alpha muss zwischen 0 und 1 liegen, ist {v}")
+        return v
+
+    @field_validator("MIN_CONFIDENCE", "SOFT_MIN_CONFIDENCE")
+    @classmethod
+    def _confidence_range(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError(f"Confidence muss zwischen 0 und 1 liegen, ist {v}")
+        return v
+
+    @model_validator(mode="after")
+    def _soft_lt_min(self) -> "AppSettings":
+        if self.SOFT_MIN_CONFIDENCE >= self.MIN_CONFIDENCE:
+            raise ValueError(
+                f"SOFT_MIN_CONFIDENCE ({self.SOFT_MIN_CONFIDENCE}) "
+                f"muss kleiner als MIN_CONFIDENCE ({self.MIN_CONFIDENCE}) sein"
+            )
+        return self
+
+
+# -- Singleton-Instanz --------------------------------------------------------
+settings = AppSettings()
+
+
+# -- Rueckwaertskompatible Module-Level-Konstanten ----------------------------
+# Alle bestehenden ``from config import X``-Stellen bleiben unveraendert.
+
+EMOTIONS = settings.EMOTIONS
+WEBCAM_INDEX = settings.WEBCAM_INDEX
+HUE_BRIDGE_IP = settings.HUE_BRIDGE_IP
+HUE_LIGHT_IDS = settings.HUE_LIGHT_IDS
+FRAME_WIDTH = settings.FRAME_WIDTH
+FRAME_HEIGHT = settings.FRAME_HEIGHT
+TARGET_FPS = settings.TARGET_FPS
+CAMERA_BUFFER_SIZE = settings.CAMERA_BUFFER_SIZE
+ANALYSIS_EVERY_N_FRAMES = settings.ANALYSIS_EVERY_N_FRAMES
+MIN_ANALYSIS_EVERY_N_FRAMES = settings.MIN_ANALYSIS_EVERY_N_FRAMES
+MAX_ANALYSIS_EVERY_N_FRAMES = settings.MAX_ANALYSIS_EVERY_N_FRAMES
+ADAPTIVE_ANALYSIS = settings.ADAPTIVE_ANALYSIS
+ADAPTIVE_FPS_LOW = settings.ADAPTIVE_FPS_LOW
+ADAPTIVE_FPS_HIGH = settings.ADAPTIVE_FPS_HIGH
+MIN_RUNTIME_FPS = settings.MIN_RUNTIME_FPS
+LOW_FPS_RECOVERY_HYSTERESIS = settings.LOW_FPS_RECOVERY_HYSTERESIS
+STARTUP_GUARD_DELAY_SECONDS = settings.STARTUP_GUARD_DELAY_SECONDS
+DETECTOR_BACKEND = settings.DETECTOR_BACKEND
+MIN_CONFIDENCE = settings.MIN_CONFIDENCE
+SOFT_MIN_CONFIDENCE = settings.SOFT_MIN_CONFIDENCE
+LOW_CONFIDENCE_ALPHA_SCALE = settings.LOW_CONFIDENCE_ALPHA_SCALE
+ANALYSIS_FRAME_SIZE = settings.ANALYSIS_FRAME_SIZE
+UNCERTAINTY_MARGIN_WEIGHT = settings.UNCERTAINTY_MARGIN_WEIGHT
+UNCERTAINTY_ENTROPY_WEIGHT = settings.UNCERTAINTY_ENTROPY_WEIGHT
+LOW_QUALITY_THRESHOLD = settings.LOW_QUALITY_THRESHOLD
+LOW_QUALITY_NEUTRAL_BLEND = settings.LOW_QUALITY_NEUTRAL_BLEND
+LOW_QUALITY_MIN_TRANSITION = settings.LOW_QUALITY_MIN_TRANSITION
+USE_COLOR_CONSTANCY = settings.USE_COLOR_CONSTANCY
+CLAHE_CLIP_LIMIT = settings.CLAHE_CLIP_LIMIT
+EMA_ALPHA = settings.EMA_ALPHA
+EMA_MIN_WEIGHT = settings.EMA_MIN_WEIGHT
+FALLBACK_DECAY = settings.FALLBACK_DECAY
+TREND_INFLUENCE = settings.TREND_INFLUENCE
+BURST_CONFIDENCE_DELTA = settings.BURST_CONFIDENCE_DELTA
+BURST_FRAMES = settings.BURST_FRAMES
+TRANSITION_TIME = settings.TRANSITION_TIME
+FALLBACK_AFTER_SECONDS = settings.FALLBACK_AFTER_SECONDS
+ABSENCE_LIGHT_OFF_SECONDS = settings.ABSENCE_LIGHT_OFF_SECONDS
+HUE_MIN_UPDATE_INTERVAL = settings.HUE_MIN_UPDATE_INTERVAL
+HUE_HUE_QUANT = settings.HUE_HUE_QUANT
+HUE_BRI_QUANT = settings.HUE_BRI_QUANT
+HUE_SAT_QUANT = settings.HUE_SAT_QUANT
+HUE_CT_QUANT = settings.HUE_CT_QUANT
+USE_VALENCE_AROUSAL = settings.USE_VALENCE_AROUSAL
+VALENCE_AROUSAL_MAP = settings.VALENCE_AROUSAL_MAP
+VA_HUE_NEGATIVE = settings.VA_HUE_NEGATIVE
+VA_HUE_NEUTRAL = settings.VA_HUE_NEUTRAL
+VA_HUE_POSITIVE = settings.VA_HUE_POSITIVE
+VA_BRI_LOW = settings.VA_BRI_LOW
+VA_BRI_HIGH = settings.VA_BRI_HIGH
+VA_SAT_LOW = settings.VA_SAT_LOW
+VA_SAT_HIGH = settings.VA_SAT_HIGH
+VA_CT_NEGATIVE = settings.VA_CT_NEGATIVE
+VA_CT_NEUTRAL = settings.VA_CT_NEUTRAL
+VA_CT_POSITIVE = settings.VA_CT_POSITIVE
+VA_CT_AROUSAL_SHIFT = settings.VA_CT_AROUSAL_SHIFT
+EMOTION_MAP = settings.EMOTION_MAP
+FALLBACK_LIGHT = settings.FALLBACK_LIGHT
+USE_AUDIO = settings.USE_AUDIO
+AUDIO_DEVICE_INDEX = settings.AUDIO_DEVICE_INDEX
+AUDIO_SAMPLE_RATE = settings.AUDIO_SAMPLE_RATE
+AUDIO_CHUNK_SECONDS = settings.AUDIO_CHUNK_SECONDS
+AUDIO_INFERENCE_COOLDOWN = settings.AUDIO_INFERENCE_COOLDOWN
+AUDIO_EMA_ALPHA = settings.AUDIO_EMA_ALPHA
+AUDIO_WEIGHT = settings.AUDIO_WEIGHT
+AUDIO_SNR_DB_FLOOR = settings.AUDIO_SNR_DB_FLOOR
+AUDIO_SNR_DB_CEIL = settings.AUDIO_SNR_DB_CEIL
+AUDIO_DYNAMIC_MIN_FACTOR = settings.AUDIO_DYNAMIC_MIN_FACTOR
+AUDIO_DYNAMIC_QUALITY_EXPONENT = settings.AUDIO_DYNAMIC_QUALITY_EXPONENT
+USE_POSE = settings.USE_POSE
+POSE_WEIGHT = settings.POSE_WEIGHT
+POSE_FRAME_SIZE = settings.POSE_FRAME_SIZE
+USE_FACE_MESH = settings.USE_FACE_MESH
+FACE_MESH_WEIGHT = settings.FACE_MESH_WEIGHT
+FACE_MESH_FRAME_SIZE = settings.FACE_MESH_FRAME_SIZE
+HEAD_POSE_PENALTY_YAW = settings.HEAD_POSE_PENALTY_YAW
+HEAD_POSE_PENALTY_PITCH = settings.HEAD_POSE_PENALTY_PITCH
+HEAD_POSE_MAX_ATTENUATION = settings.HEAD_POSE_MAX_ATTENUATION
+USE_HEAD_POSE_CONFIDENCE = settings.USE_HEAD_POSE_CONFIDENCE
+HEAD_POSE_CONFIDENCE_STRENGTH = settings.HEAD_POSE_CONFIDENCE_STRENGTH
+USE_HRV = settings.USE_HRV
+HRV_WINDOW_SECONDS = settings.HRV_WINDOW_SECONDS
+HRV_FRAME_INTERVAL = settings.HRV_FRAME_INTERVAL
+HRV_AROUSAL_INFLUENCE = settings.HRV_AROUSAL_INFLUENCE
+HRV_MIN_CONFIDENCE = settings.HRV_MIN_CONFIDENCE
+HRV_BASELINE_BPM = settings.HRV_BASELINE_BPM
+HRV_BASELINE_ADAPT_ALPHA = settings.HRV_BASELINE_ADAPT_ALPHA
+HRV_OFFSET_EMA_ALPHA = settings.HRV_OFFSET_EMA_ALPHA
+HRV_OFFSET_CLAMP = settings.HRV_OFFSET_CLAMP
+USE_BREATHING = settings.USE_BREATHING
+BREATHING_WINDOW_SECONDS = settings.BREATHING_WINDOW_SECONDS
+BREATHING_FRAME_INTERVAL = settings.BREATHING_FRAME_INTERVAL
+BREATHING_AROUSAL_INFLUENCE = settings.BREATHING_AROUSAL_INFLUENCE
+BREATHING_MIN_CONFIDENCE = settings.BREATHING_MIN_CONFIDENCE
+BREATHING_BASELINE_SECONDS = settings.BREATHING_BASELINE_SECONDS
+BREATHING_BASELINE_ADAPT_ALPHA = settings.BREATHING_BASELINE_ADAPT_ALPHA
+BREATHING_OFFSET_EMA_ALPHA = settings.BREATHING_OFFSET_EMA_ALPHA
+BREATHING_OFFSET_CLAMP = settings.BREATHING_OFFSET_CLAMP
+BREATHING_TRANSITION_INFLUENCE = settings.BREATHING_TRANSITION_INFLUENCE
+ADAPTIVE_REGULATION = settings.ADAPTIVE_REGULATION
+ADAPTIVE_TARGET_VALENCE = settings.ADAPTIVE_TARGET_VALENCE
+ADAPTIVE_TARGET_AROUSAL = settings.ADAPTIVE_TARGET_AROUSAL
+ADAPTIVE_BLEND_STRENGTH = settings.ADAPTIVE_BLEND_STRENGTH
+ADAPTIVE_BLEND_MAX = settings.ADAPTIVE_BLEND_MAX
+ADAPTIVE_PROGRESS_TIMEOUT = settings.ADAPTIVE_PROGRESS_TIMEOUT
+ADAPTIVE_BLEND_ESCALATION = settings.ADAPTIVE_BLEND_ESCALATION
+ADAPTIVE_AT_TARGET_THRESHOLD = settings.ADAPTIVE_AT_TARGET_THRESHOLD
+CALIBRATION_FILE = settings.CALIBRATION_FILE
+CALIBRATION_SECONDS_PER_EMOTION = settings.CALIBRATION_SECONDS_PER_EMOTION
+USE_CIRCADIAN = settings.USE_CIRCADIAN
+CIRCADIAN_UPDATE_INTERVAL = settings.CIRCADIAN_UPDATE_INTERVAL
+USE_BREATHING_PACER = settings.USE_BREATHING_PACER
+BREATHING_PACER_BPM = settings.BREATHING_PACER_BPM
+BREATHING_PACER_AMPLITUDE = settings.BREATHING_PACER_AMPLITUDE
+BREATHING_PACER_FADE_IN = settings.BREATHING_PACER_FADE_IN
+BREATHING_PACER_BR_THRESHOLD = settings.BREATHING_PACER_BR_THRESHOLD
+HUE_LIGHT_ROLES = settings.HUE_LIGHT_ROLES
+PREDICTIVE_TREND_THRESHOLD = settings.PREDICTIVE_TREND_THRESHOLD
+PREDICTIVE_TRIGGER_SECONDS = settings.PREDICTIVE_TRIGGER_SECONDS
+PREDICTIVE_BOOST_FACTOR = settings.PREDICTIVE_BOOST_FACTOR
+PREDICTIVE_BOOST_DURATION = settings.PREDICTIVE_BOOST_DURATION
+USE_PUPIL_BLINK = settings.USE_PUPIL_BLINK
+PUPIL_AROUSAL_INFLUENCE = settings.PUPIL_AROUSAL_INFLUENCE
+PUPIL_DILATION_BASELINE = settings.PUPIL_DILATION_BASELINE
+PUPIL_OFFSET_CLAMP = settings.PUPIL_OFFSET_CLAMP
+BLINK_RATE_FATIGUE_THRESHOLD = settings.BLINK_RATE_FATIGUE_THRESHOLD
+BLINK_RATE_FOCUS_THRESHOLD = settings.BLINK_RATE_FOCUS_THRESHOLD
+BLINK_VALENCE_INFLUENCE = settings.BLINK_VALENCE_INFLUENCE
+USE_EXTENDED_POSE = settings.USE_EXTENDED_POSE
+TORSO_LEAN_AROUSAL_INFLUENCE = settings.TORSO_LEAN_AROUSAL_INFLUENCE
+SHOULDER_DROP_VALENCE_INFLUENCE = settings.SHOULDER_DROP_VALENCE_INFLUENCE
+HEAD_TILT_RELAXATION_THRESHOLD = settings.HEAD_TILT_RELAXATION_THRESHOLD
+USE_ACTIVITY_MONITOR = settings.USE_ACTIVITY_MONITOR
+ACTIVITY_AROUSAL_INFLUENCE = settings.ACTIVITY_AROUSAL_INFLUENCE
+ACTIVITY_TRANSITION_INFLUENCE = settings.ACTIVITY_TRANSITION_INFLUENCE
+USE_PROSODIC = settings.USE_PROSODIC
+PROSODIC_PITCH_STRESS_HZ = settings.PROSODIC_PITCH_STRESS_HZ
+PROSODIC_PITCH_CALM_HZ = settings.PROSODIC_PITCH_CALM_HZ
+PROSODIC_AROUSAL_INFLUENCE = settings.PROSODIC_AROUSAL_INFLUENCE
+PROSODIC_SPEECH_RATE_HIGH = settings.PROSODIC_SPEECH_RATE_HIGH
+PROSODIC_SPEECH_RATE_LOW = settings.PROSODIC_SPEECH_RATE_LOW
+USE_COGNITIVE_CLASSIFIER = settings.USE_COGNITIVE_CLASSIFIER
+COGNITIVE_STABILITY_WINDOW = settings.COGNITIVE_STABILITY_WINDOW
+USE_MODE_SYSTEM = settings.USE_MODE_SYSTEM
+DEFAULT_MODE = settings.DEFAULT_MODE
+MODE_HYSTERESIS_S = settings.MODE_HYSTERESIS_S
+USE_BREAK_MANAGER = settings.USE_BREAK_MANAGER
+BREAK_MAX_WORK_MINUTES = settings.BREAK_MAX_WORK_MINUTES
+BREAK_FATIGUE_TRIGGER_S = settings.BREAK_FATIGUE_TRIGGER_S
+BREAK_MIN_MINUTES = settings.BREAK_MIN_MINUTES
+BREAK_POMODORO_ENABLED = settings.BREAK_POMODORO_ENABLED
+BREAK_POMODORO_WORK_MINUTES = settings.BREAK_POMODORO_WORK_MINUTES
+BREAK_POMODORO_BREAK_MINUTES = settings.BREAK_POMODORO_BREAK_MINUTES
+BREAK_POMODORO_LONG_BREAK_MINUTES = settings.BREAK_POMODORO_LONG_BREAK_MINUTES
+BREAK_POMODORO_LONG_BREAK_AFTER = settings.BREAK_POMODORO_LONG_BREAK_AFTER
+USE_FEEDBACK = settings.USE_FEEDBACK
+FEEDBACK_COOLDOWN_S = settings.FEEDBACK_COOLDOWN_S
+USE_FACE_FINETUNE_ONNX = settings.USE_FACE_FINETUNE_ONNX
+FACE_FINETUNE_ONNX_PATH = settings.FACE_FINETUNE_ONNX_PATH
+USE_ALEXA = settings.USE_ALEXA
+ALEXA_EMAIL = settings.ALEXA_EMAIL
+ALEXA_PASSWORD = settings.ALEXA_PASSWORD
+ALEXA_DEVICE_NAME = settings.ALEXA_DEVICE_NAME
+ALEXA_AMAZON_URL = settings.ALEXA_AMAZON_URL
+ALEXA_COOLDOWN_SECONDS = settings.ALEXA_COOLDOWN_SECONDS
+ALEXA_MUSIC_PROVIDER = settings.ALEXA_MUSIC_PROVIDER
+ALEXA_VOLUME_CONTROL = settings.ALEXA_VOLUME_CONTROL
+ALEXA_MOOD_PLAYLISTS = settings.ALEXA_MOOD_PLAYLISTS
 
 
 # === Lokale Overrides (optional, nicht versioniert) ===
-# Lege bei Bedarf eine `config_local.py` im Projektroot an, um sensible lokale
-# Werte wie Bridge-IP/Lampenrollen zu ueberschreiben, ohne `config.py` zu aendern.
+# config_local.py kann weiterhin sensible Werte ueberschreiben.
+# Die Overrides werden auf die Singleton-Instanz UND die Module-Level-Konstanten angewandt.
+_LOCAL_KEYS = (
+    "HUE_BRIDGE_IP",
+    "HUE_LIGHT_IDS",
+    "HUE_LIGHT_ROLES",
+    "USE_ALEXA",
+    "ALEXA_EMAIL",
+    "ALEXA_PASSWORD",
+    "ALEXA_DEVICE_NAME",
+    "ALEXA_AMAZON_URL",
+    "ALEXA_COOLDOWN_SECONDS",
+    "ALEXA_MUSIC_PROVIDER",
+    "ALEXA_VOLUME_CONTROL",
+    "ALEXA_MOOD_PLAYLISTS",
+)
 try:
     import config_local as _config_local  # type: ignore
 
-    _LOCAL_KEYS = (
-        "HUE_BRIDGE_IP",
-        "HUE_LIGHT_IDS",
-        "HUE_LIGHT_ROLES",
-        "USE_ALEXA",
-        "ALEXA_EMAIL",
-        "ALEXA_PASSWORD",
-        "ALEXA_DEVICE_NAME",
-        "ALEXA_AMAZON_URL",
-        "ALEXA_COOLDOWN_SECONDS",
-        "ALEXA_MUSIC_PROVIDER",
-        "ALEXA_VOLUME_CONTROL",
-        "ALEXA_MOOD_PLAYLISTS",
-    )
+    _overrides: dict = {}
     for _name in _LOCAL_KEYS:
         if hasattr(_config_local, _name):
-            globals()[_name] = getattr(_config_local, _name)
+            _overrides[_name] = getattr(_config_local, _name)
+    if _overrides:
+        settings = settings.model_copy(update=_overrides)
+        # Module-Level-Konstanten ebenfalls aktualisieren
+        import sys as _sys
+        _this = _sys.modules[__name__]
+        for _k, _v in _overrides.items():
+            setattr(_this, _k, _v)
 except Exception:
     pass

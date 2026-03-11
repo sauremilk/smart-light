@@ -32,3 +32,7 @@ pretrained_models/
 config_local.py
 .env
 .env.*
+
+# Alexa session artifacts (cookies, tokens)
+alexa_session_*
+*.pickle

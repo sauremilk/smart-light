@@ -5,13 +5,23 @@ Läuft vollständig asynchron in einem Daemon-Thread – der Main-Loop wird nich
 
 Setup (einmalig):
     1. pip install alexapy
-    2. Amazon-Konto-Daten in config_local.py eintragen:
+    2. Credentials als Umgebungsvariablen setzen (empfohlen)::
+
+           set SMART_LIGHT_ALEXA_EMAIL=deine@email.de
+           set SMART_LIGHT_ALEXA_PASSWORD=deinPasswort
+
+       Alternativ in config_local.py (nicht versioniert) eintragen.
+    3. In config_local.py aktivieren::
+
            USE_ALEXA = True
-           ALEXA_EMAIL = "deine@email.de"
-           ALEXA_PASSWORD = "deinPasswort"
            ALEXA_DEVICE_NAME = "Michs Echo"  # exakter Name aus der Alexa-App
-    3. Beim ersten Start: Browser öffnen falls 2-FA verlangt wird
+
+    4. Beim ersten Start: Browser öffnen falls 2-FA verlangt wird
        (alexapy speichert den Cookie danach als alexa_session_cookies.pickle).
+
+Hinweis:
+    alexapy nutzt inoffizielle Amazon-Endpunkte. Amazon kann diese jederzeit
+    ändern oder den Zugang sperren.
 """
 
 import asyncio
@@ -23,17 +33,43 @@ import time
 
 log = logging.getLogger("emotion-light.alexa")
 
+_PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 # ---------------------------------------------------------------------------
 # Stimmungs-Mapping
 # ---------------------------------------------------------------------------
 
 
-def _va_to_mood(valence: float, arousal: float) -> str:
-    """Ordnet Valence/Arousal einer von fünf Stimmungskategorien zu."""
-    if valence >= 0.25:
+# Hysterese-Schwellen: unterschiedliche Schwellen je nach Richtung
+# verhindern Mood-Flapping an den Grenzen.
+_MOOD_THRESHOLDS = {
+    "positive_enter": 0.25,
+    "positive_leave": 0.18,
+    "negative_enter": -0.20,
+    "negative_leave": -0.13,
+}
+
+
+def _va_to_mood(valence: float, arousal: float, current_mood: str | None = None) -> str:
+    """Ordnet Valence/Arousal einer von fünf Stimmungskategorien zu.
+
+    Nutzt Hysterese: um von neutral in positiv/negativ zu wechseln gelten
+    strengere Schwellen als um dort zu bleiben.
+    """
+    is_positive = current_mood in ("energetic_positive", "calm_positive")
+    is_negative = current_mood in ("energetic_negative", "calm_negative")
+
+    pos_thresh = (
+        _MOOD_THRESHOLDS["positive_leave"] if is_positive else _MOOD_THRESHOLDS["positive_enter"]
+    )
+    neg_thresh = (
+        _MOOD_THRESHOLDS["negative_leave"] if is_negative else _MOOD_THRESHOLDS["negative_enter"]
+    )
+
+    if valence >= pos_thresh:
         return "energetic_positive" if arousal >= 0.15 else "calm_positive"
-    if valence < -0.20:
+    if valence < neg_thresh:
         return "energetic_negative" if arousal >= 0.10 else "calm_negative"
     return "neutral"
 
@@ -66,6 +102,9 @@ class AlexaController:
     Neuverbindungslogik und Cooldown-Throttling werden intern verwaltet.
     """
 
+    _MAX_RECONNECT_ATTEMPTS = 3
+    _RECONNECT_BASE_DELAY = 10.0  # Sekunden; wird exponentiell erhöht
+
     def __init__(
         self,
         email: str,
@@ -91,6 +130,8 @@ class AlexaController:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._current_mood: str | None = None
         self._last_action_time: float = 0.0
+        self._last_update_time: float = 0.0  # Zeitpunkt des letzten update()-Aufrufs
+        self._absence_warned: bool = False
 
         # Async objects (nur im Loop-Thread beschreiben)
         self._login = None
@@ -106,10 +147,13 @@ class AlexaController:
 
     def start(self) -> None:
         """Startet den Hintergrundthread mit eigenem asyncio-Loop."""
-        self._thread = threading.Thread(
-            target=self._run_loop, daemon=True, name="alexa-loop"
-        )
+        self._thread = threading.Thread(target=self._run_loop, daemon=True, name="alexa-loop")
         self._thread.start()
+
+    @property
+    def ready(self) -> bool:
+        """True wenn Login + Gerätefindung erfolgreich abgeschlossen sind."""
+        return self._ready
 
     def update(self, valence: float, arousal: float, emotion: str) -> None:
         """Thread-safe: reicht ein Emotions-Update in den async-Loop ein.
@@ -117,6 +161,8 @@ class AlexaController:
         Wird vom Main-Loop aufgerufen. Kehrt sofort zurück.
         """
         with self._lock:
+            self._last_update_time = time.time()
+            self._absence_warned = False
             if self._loop is None or not self._loop.is_running():
                 return
         # run_coroutine_threadsafe ist thread-safe, kein Lock nötig
@@ -146,7 +192,6 @@ class AlexaController:
     def _run_loop(self) -> None:
         """Einstiegspunkt des Daemon-Threads: erstellt und betreibt den async-Loop."""
         loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         with self._lock:
             self._loop = loop
         try:
@@ -172,11 +217,32 @@ class AlexaController:
             )
             return
 
-        try:
-            await self._initialize_login()
-        except Exception as exc:
-            log.error("Alexa-Initialisierung fehlgeschlagen: %s", exc)
-            return
+        # Login mit Reconnect-Versuchen bei Fehlschlag
+        for attempt in range(1, self._MAX_RECONNECT_ATTEMPTS + 1):
+            try:
+                await self._initialize_login()
+                break
+            except Exception as exc:
+                if attempt == self._MAX_RECONNECT_ATTEMPTS:
+                    log.error(
+                        "Alexa-Initialisierung nach %d Versuchen endgültig fehlgeschlagen: %s",
+                        attempt,
+                        exc,
+                    )
+                    return
+                delay = self._RECONNECT_BASE_DELAY * (2 ** (attempt - 1))
+                log.warning(
+                    "Alexa-Initialisierung fehlgeschlagen (Versuch %d/%d): %s – "
+                    "Nächster Versuch in %.0fs.",
+                    attempt,
+                    self._MAX_RECONNECT_ATTEMPTS,
+                    exc,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+
+        # Passwort nach erfolgreichem Login aus dem Speicher entfernen
+        self._password = ""
 
         # Loop-lebendig halten: run_coroutine_threadsafe-Tasks werden parallel ausgeführt
         await self._stop_event.wait()
@@ -208,10 +274,7 @@ class AlexaController:
         if "debug" in init_params:
             kwargs["debug"] = False
         if "outputpath" in init_params:
-            # Store alexa session artifacts locally in the project directory.
-            kwargs["outputpath"] = lambda name: os.path.join(
-                os.getcwd(), f"alexa_session_{name}"
-            )
+            kwargs["outputpath"] = lambda name: os.path.join(_PROJECT_DIR, f"alexa_session_{name}")
         elif "outputfiles_prefix" in init_params:
             kwargs["outputfiles_prefix"] = "alexa_session_"
 
@@ -221,10 +284,12 @@ class AlexaController:
 
         status = self._login.status or {}
         if not status.get("login_successful"):
+            # Nur sichere Statusfelder loggen – Tokens/Cookies ausschließen.
+            _safe_keys = {"login_successful", "error", "error_message", "captcha_required"}
+            safe_status = {k: v for k, v in status.items() if k in _safe_keys}
             log.error(
-                "Alexa-Login fehlgeschlagen (Status: %s). "
-                "Prüfe Zugangsdaten in config_local.py.",
-                {k: v for k, v in status.items() if k != "cookies"},
+                "Alexa-Login fehlgeschlagen (Status: %s). Prüfe Zugangsdaten in config_local.py.",
+                safe_status,
             )
             return
 
@@ -250,15 +315,17 @@ class AlexaController:
             str(self._device.get("serialNumber", "?"))[:6],
         )
 
-    async def _handle_update(
-        self, valence: float, arousal: float, emotion: str
-    ) -> None:
+    async def _handle_update(self, valence: float, arousal: float, emotion: str) -> None:
         """Reagiert auf ein Emotions-Update (läuft im async-Loop-Thread)."""
         if not self._ready or self._device is None:
             return
 
         now = time.time()
-        new_mood = _va_to_mood(valence, arousal)
+
+        with self._lock:
+            current = self._current_mood
+
+        new_mood = _va_to_mood(valence, arousal, current_mood=current)
 
         with self._lock:
             mood_changed = new_mood != self._current_mood
@@ -275,9 +342,7 @@ class AlexaController:
             if self._volume_control:
                 vol = _va_to_volume(valence, arousal)
                 await api.set_volume(vol)
-                log.debug(
-                    "Alexa: Lautstärke → %d (V=%.2f A=%.2f)", vol, valence, arousal
-                )
+                log.debug("Alexa: Lautstärke → %d (V=%.2f A=%.2f)", vol, valence, arousal)
 
             search_phrase = self._playlists.get(new_mood, "background music")
             await api.play_music(self._provider, search_phrase)
@@ -297,3 +362,22 @@ class AlexaController:
 
         except Exception as exc:
             log.warning("Alexa-Aktion fehlgeschlagen: %s", exc)
+
+    def check_absence(self, timeout_seconds: float = 180.0) -> None:
+        """Prüft ob seit timeout_seconds kein Update kam und warnt einmalig.
+
+        Vom Main-Loop aufgerufen wenn kein Gesicht erkannt wird.
+        """
+        with self._lock:
+            if not self._ready or self._last_update_time == 0.0:
+                return
+            elapsed = time.time() - self._last_update_time
+            already_warned = self._absence_warned
+
+        if elapsed >= timeout_seconds and not already_warned:
+            log.warning(
+                "Alexa: Seit %.0fs kein Emotions-Update – Musik läuft ggf. unbeaufsichtigt weiter.",
+                elapsed,
+            )
+            with self._lock:
+                self._absence_warned = True
