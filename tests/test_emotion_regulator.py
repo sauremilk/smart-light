@@ -1,5 +1,5 @@
-from emotion_regulator import EmotionRegulator
-from light_mapping import compute_va_from_ema
+from core.emotion_regulator import EmotionRegulator
+from core.light_mapping import compute_va_from_ema
 
 
 def test_regulator_moves_state_towards_target():

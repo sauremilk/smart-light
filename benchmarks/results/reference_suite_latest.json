@@ -1,6 +1,6 @@
 {
   "benchmark": "reference_suite_v2",
-  "generated_at_utc": "2026-03-08T19:52:23Z",
+  "generated_at_utc": "2026-03-11T07:29:27Z",
   "profile": "quick",
   "settings": {
     "seed": 17,
@@ -423,8 +423,8 @@
               }
             },
             "runtime": {
-              "total_seconds": 2.101365900000019,
-              "hard_samples_per_second": 9.993499942108993
+              "total_seconds": 1.984087499999987,
+              "hard_samples_per_second": 10.584210625791522
             }
           },
           "with_face_mesh": {
@@ -787,8 +787,8 @@
               }
             },
             "runtime": {
-              "total_seconds": 0.9374668000000383,
-              "hard_samples_per_second": 22.400793286758677
+              "total_seconds": 0.9324144999991404,
+              "hard_samples_per_second": 22.522172274261457
             }
           }
         }
@@ -841,46 +841,46 @@
         "passed": 60,
         "total": 60,
         "all_passed": true,
-        "output_tail": "............................................................             [100%]\n60 passed in 4.35s"
+        "output_tail": "............................................................             [100%]\n60 passed in 4.39s"
       }
     },
     "module_sanity": {
-      "score01": 1.0,
+      "score01": 0.0,
       "details": {
-        "score_index": 1000,
-        "passed": 5,
+        "score_index": 0,
+        "passed": 0,
         "total": 5,
         "checks": [
           {
             "name": "fusion_normalized",
-            "ok": true
+            "ok": false
           },
           {
             "name": "regulator_moves_toward_target",
-            "ok": true
+            "ok": false
           },
           {
             "name": "hrv_signal_math",
-            "ok": true
+            "ok": false
           },
           {
             "name": "breathing_peak_detection",
-            "ok": true
+            "ok": false
           },
           {
             "name": "face_mesh_emotion_mapping",
-            "ok": true
+            "ok": false
           }
         ]
       }
     },
     "e2e_runtime": {
-      "score01": 0.9359677407790334,
+      "score01": 0.9358936605860626,
       "details": {
         "score_index": 936,
         "e2e_profile": "quick",
         "aggregate": {
-          "score01": 0.9359677407790334,
+          "score01": 0.9358936605860626,
           "index": 936
         },
         "settings": {
@@ -896,8 +896,8 @@
         "scenarios": [
           {
             "scenario": "video_minimal",
-            "command": "C:\\Users\\mickg\\smart-light\\.venv\\Scripts\\python.exe C:\\Users\\mickg\\smart-light\\main.py --mock --session-log C:\\Users\\mickg\\AppData\\Local\\Temp\\e2e_video_minimal_f3pvrv5s.jsonl --condition control --no-audio --no-pose --no-face-mesh --no-hrv --no-breathing",
-            "duration_seconds": 12.00817084312439,
+            "command": "C:\\Users\\mickg\\smart-light\\.venv\\Scripts\\python.exe C:\\Users\\mickg\\smart-light\\main.py --mock --session-log C:\\Users\\mickg\\AppData\\Local\\Temp\\e2e_video_minimal_sd7nfj98.jsonl --condition control --no-audio --no-pose --no-face-mesh --no-hrv --no-breathing",
+            "duration_seconds": 12.009635210037231,
             "requested_duration_seconds": 12.0,
             "return_code": 1,
             "stable_exit": true,
@@ -905,17 +905,17 @@
               "observed_ticks": 9.0,
               "expected_ticks": 12.0,
               "drop_rate": 0.25,
-              "loop_hz": 0.9712690537528584,
-              "latency_p50_ms": 1029.651165008545,
-              "latency_p95_ms": 1030.9582352638245,
-              "latency_p99_ms": 1031.0840725898743,
-              "interval_mean_ms": 1029.58083152771
+              "loop_hz": 0.9706795710944058,
+              "latency_p50_ms": 1030.4158926010132,
+              "latency_p95_ms": 1032.8558921813965,
+              "latency_p99_ms": 1033.5531044006348,
+              "interval_mean_ms": 1030.2060842514038
             },
             "process": {
               "cpu_mean_percent": 0.0,
               "cpu_p95_percent": 0.0,
-              "rss_mean_mb": 3.84375,
-              "rss_peak_mb": 3.84375,
+              "rss_mean_mb": 4.421875,
+              "rss_peak_mb": 4.421875,
               "rss_drift_mb_per_min": 0.0
             },
             "samples": {
@@ -924,12 +924,12 @@
               "session_log_rows": 9
             },
             "score": {
-              "score01": 0.936848345287118,
-              "score_index": 937,
+              "score01": 0.9364522606649024,
+              "score_index": 936,
               "subscores": {
-                "loop_hz": 0.9712690537528584,
+                "loop_hz": 0.9706795710944058,
                 "drop_rate": 0.75,
-                "latency_p95": 0.9845208823680878,
+                "latency_p95": 0.9835720539093018,
                 "cpu_headroom": 1.0,
                 "memory_drift": 1.0,
                 "stability": 1.0
@@ -938,8 +938,8 @@
           },
           {
             "scenario": "video_face_mesh",
-            "command": "C:\\Users\\mickg\\smart-light\\.venv\\Scripts\\python.exe C:\\Users\\mickg\\smart-light\\main.py --mock --session-log C:\\Users\\mickg\\AppData\\Local\\Temp\\e2e_video_face_mesh_i2u7qmik.jsonl --condition control --no-audio --no-pose --no-hrv --no-breathing",
-            "duration_seconds": 12.00903058052063,
+            "command": "C:\\Users\\mickg\\smart-light\\.venv\\Scripts\\python.exe C:\\Users\\mickg\\smart-light\\main.py --mock --session-log C:\\Users\\mickg\\AppData\\Local\\Temp\\e2e_video_face_mesh_v12fybbt.jsonl --condition control --no-audio --no-pose --no-hrv --no-breathing",
+            "duration_seconds": 12.009901762008667,
             "requested_duration_seconds": 12.0,
             "return_code": 1,
             "stable_exit": true,
@@ -947,17 +947,17 @@
               "observed_ticks": 9.0,
               "expected_ticks": 12.0,
               "drop_rate": 0.25,
-              "loop_hz": 0.9686812305517098,
-              "latency_p50_ms": 1031.251311302185,
-              "latency_p95_ms": 1039.5129442214966,
-              "latency_p99_ms": 1042.1446466445923,
-              "interval_mean_ms": 1032.3313474655151
+              "loop_hz": 0.9685452567684217,
+              "latency_p50_ms": 1031.8065881729126,
+              "latency_p95_ms": 1036.5577936172485,
+              "latency_p99_ms": 1037.1806383132935,
+              "interval_mean_ms": 1032.4762761592865
             },
             "process": {
               "cpu_mean_percent": 0.0,
               "cpu_p95_percent": 0.0,
-              "rss_mean_mb": 3.84375,
-              "rss_peak_mb": 3.84375,
+              "rss_mean_mb": 4.421875,
+              "rss_peak_mb": 4.421875,
               "rss_drift_mb_per_min": 0.0
             },
             "samples": {
@@ -966,12 +966,12 @@
               "session_log_rows": 9
             },
             "score": {
-              "score01": 0.9350871362709487,
+              "score01": 0.9353350605072228,
               "score_index": 935,
               "subscores": {
-                "loop_hz": 0.9686812305517098,
+                "loop_hz": 0.9685452567684217,
                 "drop_rate": 0.75,
-                "latency_p95": 0.9802435278892517,
+                "latency_p95": 0.9817211031913757,
                 "cpu_headroom": 1.0,
                 "memory_drift": 1.0,
                 "stability": 1.0
@@ -983,18 +983,18 @@
     }
   },
   "composite": {
-    "score01": 0.5325502016027595,
-    "index": 533
+    "score01": 0.43254279358346237,
+    "index": 433
   },
   "runtime": {
-    "total_seconds": 35.99887149999995,
+    "total_seconds": 35.833313899999666,
     "component_seconds": {
-      "extreme_visual_robustness": 3.0498017000008986,
-      "multi_seed_stability": 2.977711100000306,
-      "test_quality": 4.825785799999721,
-      "module_sanity": 0.001961799998753122,
-      "e2e_runtime": 24.03332229999978,
-      "real_world_uncertainty": 0.00017690000095171854
+      "extreme_visual_robustness": 2.9172380999998495,
+      "multi_seed_stability": 2.9022013000003426,
+      "test_quality": 4.876024600000164,
+      "module_sanity": 0.0012741999998979736,
+      "e2e_runtime": 24.034958900000674,
+      "real_world_uncertainty": 0.0001712000002953573
     }
   },
   "extensions": {
@@ -1008,58 +1008,48 @@
     "baseline_present": true,
     "pass": false,
     "reasons": [
-      "Component regression extreme_visual_robustness: current=0.1838, baseline=0.2840, allowed_drop=0.0400"
+      "Composite index dropped too much: current=433, baseline=541, allowed_drop=15",
+      "Component regression extreme_visual_robustness: current=0.1838, baseline=0.2840, allowed_drop=0.0400",
+      "Component regression module_sanity: current=0.0000, baseline=1.0000, allowed_drop=0.0400"
     ],
     "failures": [
-      "Component regression extreme_visual_robustness: current=0.1838, baseline=0.2840, allowed_drop=0.0400"
+      "Composite index dropped too much: current=433, baseline=541, allowed_drop=15",
+      "Component regression extreme_visual_robustness: current=0.1838, baseline=0.2840, allowed_drop=0.0400",
+      "Component regression module_sanity: current=0.0000, baseline=1.0000, allowed_drop=0.0400"
     ],
     "warnings": [],
     "baseline_index": 541,
-    "current_index": 533,
+    "current_index": 433,
     "benchmark_compatible": true,
     "baseline_benchmark": "reference_suite_v2",
     "current_benchmark": "reference_suite_v2"
   },
   "relative_to_baseline": {
     "baseline_present": true,
-    "composite_index_percent_of_baseline": 98.52125693160814,
+    "composite_index_percent_of_baseline": 80.0369685767098,
     "components_index_percent_of_baseline": {
       "extreme_visual_robustness": 64.7887323943662,
       "multi_seed_stability": 154.27509293680296,
       "test_quality": 100.0,
-      "module_sanity": 100.0,
+      "module_sanity": 0.0,
       "e2e_runtime": 98.31932773109243
     },
     "components_score01_percent_of_baseline": {
       "extreme_visual_robustness": 64.70811153871823,
       "multi_seed_stability": 154.39573419111156,
       "test_quality": 100.0,
-      "module_sanity": 100.0,
-      "e2e_runtime": 98.26740918027855
+      "module_sanity": 0.0,
+      "e2e_runtime": 98.2596314884654
     }
   },
   "improvement_targets": [
-    "Prioritaet: visuelle Robustheit steigern (aktuell 0.184).",
-    "Prioritaet: seed-uebergreifende Stabilitaet verbessern (aktuell 0.415)."
+    "Prioritaet: Modul-Sanity-Checks reparieren (aktuell 0.000).",
+    "Prioritaet: visuelle Robustheit steigern (aktuell 0.184)."
   ],
   "trend": {
     "has_previous": true,
     "basis": "same-profile+detector",
     "previous": {
-      "generated_at_utc": "2026-03-08T19:33:10Z",
-      "profile": "quick",
-      "detector": "opencv",
-      "composite_index": 533,
-      "component_indices": {
-        "extreme_visual_robustness": 184,
-        "multi_seed_stability": 415,
-        "test_quality": 1000,
-        "module_sanity": 1000,
-        "e2e_runtime": 936
-      },
-      "gate_pass": false
-    },
-    "current": {
       "generated_at_utc": "2026-03-08T19:52:23Z",
       "profile": "quick",
       "detector": "opencv",
@@ -1073,16 +1063,30 @@
       },
       "gate_pass": false
     },
+    "current": {
+      "generated_at_utc": "2026-03-11T07:29:27Z",
+      "profile": "quick",
+      "detector": "opencv",
+      "composite_index": 433,
+      "component_indices": {
+        "extreme_visual_robustness": 184,
+        "multi_seed_stability": 415,
+        "test_quality": 1000,
+        "module_sanity": 0,
+        "e2e_runtime": 936
+      },
+      "gate_pass": false
+    },
     "delta": {
-      "composite_index": 0,
+      "composite_index": -100,
       "component_indices": {
         "extreme_visual_robustness": 0,
         "multi_seed_stability": 0,
         "test_quality": 0,
-        "module_sanity": 0,
+        "module_sanity": -1000,
         "e2e_runtime": 0
       }
     },
-    "summary": "Composite flat by +0 points vs previous comparable run."
+    "summary": "Composite regressed by -100 points vs previous comparable run."
   }
 }

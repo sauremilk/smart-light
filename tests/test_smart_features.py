@@ -4,7 +4,7 @@ import time
 
 
 def test_circadian_24h_coverage():
-    from circadian import CircadianSchedule
+    from core.circadian import CircadianSchedule
     c = CircadianSchedule()
     for h in range(24):
         p = c.get_params(h)
@@ -20,7 +20,7 @@ def test_circadian_24h_coverage():
 
 
 def test_circadian_no_jumps():
-    from circadian import CircadianSchedule
+    from core.circadian import CircadianSchedule
     c = CircadianSchedule()
     prev = c.get_params(0)
     for h in range(1, 24):
@@ -33,7 +33,7 @@ def test_circadian_no_jumps():
 
 
 def test_breathing_pacer_inactive():
-    from light_mapping import BreathingPacer
+    from core.light_mapping import BreathingPacer
     p = BreathingPacer()
     assert not p.is_active
     assert p.get_pulsation_factor() == 1.0
@@ -41,7 +41,7 @@ def test_breathing_pacer_inactive():
 
 
 def test_breathing_pacer_active_pulsation():
-    from light_mapping import BreathingPacer
+    from core.light_mapping import BreathingPacer
     p = BreathingPacer(guide_bpm=6.0, amplitude=0.08, fade_in_seconds=0.01)
     p.set_active(True)
     time.sleep(0.02)
@@ -56,14 +56,14 @@ def test_breathing_pacer_active_pulsation():
 
 
 def test_compose_multi_light_scene_primary():
-    from light_mapping import compose_multi_light_scene
+    from core.light_mapping import compose_multi_light_scene
     primary = {"hue": 14000, "bri": 200, "sat": 180}
     result = compose_multi_light_scene(primary, "primary")
     assert result == primary
 
 
 def test_compose_multi_light_scene_accent():
-    from light_mapping import compose_multi_light_scene
+    from core.light_mapping import compose_multi_light_scene
     primary = {"hue": 14000, "bri": 200, "sat": 180}
     result = compose_multi_light_scene(primary, "accent")
     assert result["hue"] == 15500   # +1500
@@ -72,7 +72,7 @@ def test_compose_multi_light_scene_accent():
 
 
 def test_compose_multi_light_scene_ambient():
-    from light_mapping import compose_multi_light_scene
+    from core.light_mapping import compose_multi_light_scene
     primary = {"hue": 14000, "bri": 200, "sat": 180}
     result = compose_multi_light_scene(primary, "ambient")
     assert result["hue"] == 16000   # +2000
@@ -81,7 +81,7 @@ def test_compose_multi_light_scene_ambient():
 
 
 def test_regulator_set_target():
-    from emotion_regulator import EmotionRegulator
+    from core.emotion_regulator import EmotionRegulator
     r = EmotionRegulator(0.65, 0.35, 0.45, 0.8, 30, 0.1, 0.18)
     r.set_target(0.5, -0.1)
     info = r.update(-0.5, 0.5)
@@ -90,7 +90,7 @@ def test_regulator_set_target():
 
 
 def test_regulator_boost_blend():
-    from emotion_regulator import EmotionRegulator
+    from core.emotion_regulator import EmotionRegulator
     r = EmotionRegulator(0.65, 0.35, 0.45, 0.8, 30, 0.1, 0.18)
     r.update(-0.8, 0.9)  # init
     r.boost_blend(factor=1.5, duration_s=10.0)
@@ -100,7 +100,7 @@ def test_regulator_boost_blend():
 
 
 def test_regulator_quadrant_q3_aggressive():
-    from emotion_regulator import EmotionRegulator
+    from core.emotion_regulator import EmotionRegulator
     r = EmotionRegulator(0.65, 0.35, 0.45, 0.8, 30, 0.1, 0.18)
     # Q3: Stress (-v, +a) -> should use aggressive params
     info = r.update(-0.9, 1.0)
@@ -111,7 +111,7 @@ def test_regulator_quadrant_q3_aggressive():
 
 
 def test_regulator_quadrant_q2_minimal():
-    from emotion_regulator import EmotionRegulator
+    from core.emotion_regulator import EmotionRegulator
     r = EmotionRegulator(0.65, 0.35, 0.45, 0.8, 30, 0.1, 0.18)
     # Q2: Relaxed (+v, -a) -> minimal intervention
     info = r.update(0.5, -0.3)
@@ -121,7 +121,7 @@ def test_regulator_quadrant_q2_minimal():
 
 def test_warm_amber_no_blue():
     """Bei negativer Valence (Trauer/Angst) darf kein Blau mehr kommen."""
-    from light_mapping import valence_arousal_to_light
+    from core.light_mapping import valence_arousal_to_light
     # Negative Valence = Trauer
     params = valence_arousal_to_light(valence=-1.0, arousal=-0.5)
     # Hue 47000 war vorher Blau; jetzt sollte es Warm-Amber (~9000) sein

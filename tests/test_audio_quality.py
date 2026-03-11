@@ -1,4 +1,4 @@
-from audio_quality import (
+from analyzers.audio_quality import (
     compute_snr_proxy_db,
     quality_from_snr_db,
     effective_audio_weight,

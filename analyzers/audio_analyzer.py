@@ -8,8 +8,8 @@ import logging
 import threading
 import time
 import numpy as np
-from ema_utils import update_ema_vector_inplace
-from audio_quality import compute_snr_proxy_db, quality_from_snr_db
+from core.ema_utils import update_ema_vector_inplace
+from analyzers.audio_quality import compute_snr_proxy_db, quality_from_snr_db
 from config import (
     AUDIO_DEVICE_INDEX, AUDIO_SAMPLE_RATE, AUDIO_CHUNK_SECONDS,
     AUDIO_INFERENCE_COOLDOWN, AUDIO_EMA_ALPHA, EMOTION_MAP,

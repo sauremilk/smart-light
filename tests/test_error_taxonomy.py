@@ -1,4 +1,4 @@
-from error_taxonomy import (
+from core.error_taxonomy import (
     DEEPFACE_ANALYZE_FAILED,
     HUE_SEND_FAILED,
     category_for_error_code,

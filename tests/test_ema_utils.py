@@ -1,4 +1,4 @@
-from ema_utils import normalize_vector_inplace, update_ema_vector_inplace
+from core.ema_utils import normalize_vector_inplace, update_ema_vector_inplace
 
 
 def test_update_ema_vector_inplace_keeps_distribution_normalized():

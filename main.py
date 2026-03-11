@@ -114,16 +114,16 @@ from config import (
     PREDICTIVE_BOOST_FACTOR, PREDICTIVE_BOOST_DURATION,
     USE_FACE_FINETUNE_ONNX, FACE_FINETUNE_ONNX_PATH,
 )
-from ema_utils import update_ema_vector_inplace, normalize_vector_inplace
-from light_mapping import (
+from core.ema_utils import update_ema_vector_inplace, normalize_vector_inplace
+from core.light_mapping import (
     valence_arousal_to_light, blend_emotion_colors, fuse_modalities, compute_va_from_ema,
     BreathingPacer, compose_multi_light_scene,
 )
-from emotion_regulator import EmotionRegulator
-from audio_quality import effective_audio_weight
-from breathing_analyzer import BR_REST_BPM
-from circadian import CircadianSchedule
-from error_taxonomy import (
+from core.emotion_regulator import EmotionRegulator
+from analyzers.audio_quality import effective_audio_weight
+from analyzers.breathing_analyzer import BR_REST_BPM
+from core.circadian import CircadianSchedule
+from core.error_taxonomy import (
     AUDIO_ANALYZER_INIT_FAILED,
     BREATHING_ANALYZER_INIT_FAILED,
     CALIBRATION_LOAD_FAILED,
@@ -1202,7 +1202,7 @@ def main():
 
     # --- Kalibrierungsmodus ---
     if args.calibrate:
-        from calibration import run_calibration
+        from core.calibration import run_calibration
         cal_path = args.calibration_file or CALIBRATION_FILE
         run_calibration(cal_path)
         return
@@ -1264,7 +1264,7 @@ def main():
     use_audio = USE_AUDIO and not args.no_audio
     if use_audio:
         try:
-            from audio_analyzer import AudioEmotionAnalyzer
+            from analyzers.audio_analyzer import AudioEmotionAnalyzer
             audio_analyzer = AudioEmotionAnalyzer()
             audio_analyzer.start()
             log.info("Audio-Emotionserkennung gestartet.")
@@ -1284,7 +1284,7 @@ def main():
     use_pose = USE_POSE and not args.no_pose
     if use_pose:
         try:
-            from pose_analyzer import PoseEmotionAnalyzer
+            from analyzers.pose_analyzer import PoseEmotionAnalyzer
             pose_analyzer = PoseEmotionAnalyzer()
             pose_analyzer.start()
             log.info("Pose-Analyse gestartet.")
@@ -1304,7 +1304,7 @@ def main():
     use_face_mesh = USE_FACE_MESH and not args.no_face_mesh
     if use_face_mesh:
         try:
-            from face_mesh_analyzer import FaceMeshAnalyzer
+            from analyzers.face_mesh_analyzer import FaceMeshAnalyzer
             face_mesh_analyzer = FaceMeshAnalyzer()
             face_mesh_analyzer.start()
             log.info("Face-Mesh-Analyse gestartet (AUs + Kopfpose).")
@@ -1324,7 +1324,7 @@ def main():
     use_hrv = USE_HRV and not args.no_hrv
     if use_hrv:
         try:
-            from hrv_analyzer import HRVAnalyzer
+            from analyzers.hrv_analyzer import HRVAnalyzer
             hrv_analyzer = HRVAnalyzer(
                 window_seconds=HRV_WINDOW_SECONDS,
                 target_fps=TARGET_FPS,

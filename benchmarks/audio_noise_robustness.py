@@ -8,27 +8,17 @@ import os
 import sys
 import time
 
-try:
-    from audio_quality import effective_audio_weight, quality_from_snr_db
-    from config import (
-        AUDIO_WEIGHT,
-        AUDIO_SNR_DB_FLOOR,
-        AUDIO_SNR_DB_CEIL,
-        AUDIO_DYNAMIC_MIN_FACTOR,
-        AUDIO_DYNAMIC_QUALITY_EXPONENT,
-    )
-except ModuleNotFoundError:
-    ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    if ROOT_DIR not in sys.path:
-        sys.path.insert(0, ROOT_DIR)
-    from audio_quality import effective_audio_weight, quality_from_snr_db
-    from config import (
-        AUDIO_WEIGHT,
-        AUDIO_SNR_DB_FLOOR,
-        AUDIO_SNR_DB_CEIL,
-        AUDIO_DYNAMIC_MIN_FACTOR,
-        AUDIO_DYNAMIC_QUALITY_EXPONENT,
-    )
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+from analyzers.audio_quality import effective_audio_weight, quality_from_snr_db
+from config import (
+    AUDIO_WEIGHT,
+    AUDIO_SNR_DB_FLOOR,
+    AUDIO_SNR_DB_CEIL,
+    AUDIO_DYNAMIC_MIN_FACTOR,
+    AUDIO_DYNAMIC_QUALITY_EXPONENT,
+)
 
 
 def run_snr_sweep() -> dict:

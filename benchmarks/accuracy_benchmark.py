@@ -29,7 +29,12 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 from deepface import DeepFace
-from asset_integrity import ensure_mediapipe_model
+import sys as _sys
+import os as _os
+_ROOT = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), ".."))
+if _ROOT not in _sys.path:
+    _sys.path.insert(0, _ROOT)
+from core.asset_integrity import ensure_mediapipe_model
 
 try:
     from config import FACE_MESH_WEIGHT as _CFG_FACE_MESH_WEIGHT

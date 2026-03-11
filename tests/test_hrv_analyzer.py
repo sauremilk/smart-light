@@ -1,6 +1,6 @@
 import numpy as np
 
-from hrv_analyzer import HRVAnalyzer
+from analyzers.hrv_analyzer import HRVAnalyzer
 
 
 def test_decay_result_reduces_confidence_and_clears_stale_metrics():

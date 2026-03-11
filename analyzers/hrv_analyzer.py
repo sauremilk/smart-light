@@ -19,7 +19,7 @@ import os
 import numpy as np
 import cv2
 from collections import deque
-from asset_integrity import ensure_mediapipe_model
+from core.asset_integrity import ensure_mediapipe_model
 
 log = logging.getLogger("emotion-light.hrv")
 

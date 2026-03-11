@@ -16,7 +16,7 @@ import queue
 import os
 import cv2
 import numpy as np
-from asset_integrity import ensure_mediapipe_model
+from core.asset_integrity import ensure_mediapipe_model
 from config import (
     EMOTION_MAP,
     HEAD_POSE_PENALTY_YAW,

@@ -13,7 +13,7 @@ import threading
 import queue
 import cv2
 import os
-from asset_integrity import ensure_mediapipe_model
+from core.asset_integrity import ensure_mediapipe_model
 
 log = logging.getLogger("emotion-light.pose")
 
