@@ -230,7 +230,9 @@ def compare_sessions(paths: Sequence[str | Path]) -> str:
         return reports[0].summary()
 
     lines = [f"=== Vergleich von {len(reports)} Sessions ===", ""]
-    lines.append(f"{'Datei':30s} {'Dauer':>8s} {'Fokus':>7s} {'Flow':>7s} {'Stress':>7s} {'Score':>6s}")
+    lines.append(
+        f"{'Datei':30s} {'Dauer':>8s} {'Fokus':>7s} {'Flow':>7s} {'Stress':>7s} {'Score':>6s}"
+    )
     lines.append("-" * 72)
 
     for r in reports:

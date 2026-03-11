@@ -27,3 +27,13 @@ Affected critical paths:
 - `core/telemetry.py`
 - `main.py`
 
+## 2026-03-11 10:24:54
+<!-- autodoc:36b21a9f483f -->
+
+Source: `staged` by `unknown`
+
+Affected critical paths:
+- `core/break_manager.py`
+- `core/mode_manager.py`
+- `main.py`
+

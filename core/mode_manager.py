@@ -102,7 +102,7 @@ class ModeManager:
     # Mapping: kognitiver Zustand → empfohlener Modus
     _AUTO_MAP = {
         "FOCUS": "FOCUS",
-        "FLOW": "FOCUS",     # Im Flow bleiben wir bei Focus-Licht
+        "FLOW": "FOCUS",  # Im Flow bleiben wir bei Focus-Licht
         "FATIGUE": "RECOVERY",
         "STRESS": "RELAX",
         "NEUTRAL": "FOCUS",  # Default bei unklarem Zustand

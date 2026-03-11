@@ -205,7 +205,9 @@ class BreakManager:
         return BreakEvent(
             break_recommended=self._break_recommended,
             break_active=self._break_start is not None,
-            reason=self._break_reason if self._break_recommended or self._break_start is not None else "",
+            reason=self._break_reason
+            if self._break_recommended or self._break_start is not None
+            else "",
             work_duration_s=work_dur,
             break_duration_s=break_dur,
             pomodoro_cycle=self._pomo_cycle if self._pomo_enabled else 0,
